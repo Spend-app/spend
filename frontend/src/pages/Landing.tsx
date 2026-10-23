@@ -1,148 +1,190 @@
-import type { ReactNode } from 'react'
+import { useState, type CSSProperties, type ReactNode } from "react";
 import {
-  ArrowRight,
-  Bitcoin,
+  ArrowDown,
+  Check,
   ChevronDown,
   HandCoins,
   Landmark,
-  Layers,
   RotateCcw,
   ShieldCheck,
-  Wallet,
-} from 'lucide-react'
-import { CONFIG, PRICE } from '../data/mock'
-import { btc, musd, pct, usd } from '../lib/format'
-import { Button } from '../components/ui'
-import type { Tab } from '../types'
+} from "lucide-react";
+import { CONFIG, PRICE } from "../data/mock";
+import { quoteFor } from "../lib/quote";
+import { btc, musd, num, pct, usd } from "../lib/format";
+import { Logo } from "../components/AppShell";
+import Coin from "../components/Coin";
+import { Button } from "../components/ui";
+import type { Tab } from "../types";
 
 export default function Landing({ go }: { go: (t: Tab) => void }) {
-  // Worked example so the numbers on this page match the Borrow screen
-  const example = 100
-  const exampleFee = (example * CONFIG.originationFeeBps) / 10_000
-  const exampleBtc = ((example * CONFIG.minUserICR) / 100 / PRICE) * CONFIG.priceDriftBuffer
-
+  const sample = quoteFor(100);
   return (
-    <div className="-mt-8 sm:-mt-12">
-      {/* Hero */}
-      <section className="mx-auto max-w-3xl pt-14 text-center sm:pt-20">
-        <span className="inline-flex items-center gap-2 rounded-full border border-primary-line bg-primary-soft px-3 py-1 text-xs font-medium text-primary">
-          <Layers className="h-3.5 w-3.5" />
-          Built on Mezo · Testnet
-        </span>
-        <h1 className="mt-5 text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-          Small loans against your <span className="text-primary">Bitcoin</span>
-        </h1>
-        <p className="mx-auto mt-5 max-w-xl text-base text-slate-600 sm:text-lg">
-          Need {usd(CONFIG.minBorrow, 0)} or {usd(CONFIG.maxBorrow, 0)}, not thousands? Lock a little BTC, get MUSD
-          right away, and get your exact BTC back when you repay.
-        </p>
-        <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-          <Button onClick={() => go('borrow')} className="px-6 py-3 text-base">
-            Launch app
-            <ArrowRight className="h-4 w-4" />
-          </Button>
+    <div className="min-h-screen overflow-x-hidden">
+      <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5">
+        <Logo />
+        <div className="flex items-center gap-5">
           <a
             href="#how"
-            className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-base font-semibold text-slate-700 hover:bg-slate-50"
+            className="hidden text-sm font-semibold text-mute hover:text-white sm:block"
           >
             How it works
           </a>
+          <a
+            href="#faq"
+            className="hidden text-sm font-semibold text-mute hover:text-white sm:block"
+          >
+            Questions
+          </a>
+          <Button onClick={() => go("dashboard")}>Open the app</Button>
         </div>
-      </section>
+      </header>
 
-      {/* Numbers strip */}
-      <section className="mx-auto mt-14 grid max-w-3xl grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 sm:grid-cols-4">
-        <Fact value={usd(CONFIG.minBorrow, 0)} label="Smallest loan" />
-        <Fact value={pct(CONFIG.userInterestRate)} label="Interest per year" />
-        <Fact value={pct(CONFIG.originationFeeBps / 100, 2)} label="One-time fee" />
-        <Fact value={pct(CONFIG.minUserICR)} label="Minimum collateral" />
-      </section>
-
-      {/* The problem */}
-      <section className="mx-auto mt-20 grid max-w-4xl items-center gap-8 md:grid-cols-2">
+      {/* Hero */}
+      <section className="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-20 pt-10 lg:grid-cols-[1.05fr_1fr] lg:pt-16">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Borrowing on Mezo starts big</h2>
-          <p className="mt-3 text-slate-600">
-            Opening your own trove on Mezo needs a minimum of about 1,800 MUSD. That keeps the protocol safe, but it
-            leaves out people who only want a small amount of cash.
+          <h1 className="font-display text-5xl font-semibold leading-[1.04] tracking-tight text-white sm:text-6xl lg:text-7xl">
+            Get cash from your Bitcoin without selling it
+          </h1>
+          <p className="mt-6 max-w-lg text-lg text-mist/80">
+            Lock a little BTC, get MUSD right away, and get the same BTC back
+            when you repay. Loans start at {usd(CONFIG.minBorrow, 0)}.
           </p>
-          <p className="mt-3 text-slate-600">
-            Spend fixes that. It keeps one trove on Mezo and lends from its MUSD cash buffer, so you can borrow a little
-            without opening a trove of your own.
-          </p>
+          <div className="mt-8 flex flex-wrap items-center gap-3">
+            <Button
+              className="px-6 py-3.5 text-base"
+              onClick={() => go("dashboard")}
+            >
+              Open the app
+            </Button>
+            <a
+              href="#how"
+              className="rounded-xl border border-white/10 px-6 py-3.5 text-base font-semibold text-mist hover:bg-white/5"
+            >
+              See how it works
+            </a>
+          </div>
+          <ul className="mt-9 space-y-2.5 text-mist/90">
+            {[
+              `Borrow ${usd(CONFIG.minBorrow, 0)} to ${usd(CONFIG.maxBorrow, 0)}, no big minimum`,
+              `${pct(CONFIG.userInterestRate)} simple interest and a ${pct(CONFIG.originationFeeBps / 100, 2)} one-time fee`,
+              "Repay any time and get your exact BTC back",
+            ].map((t) => (
+              <li key={t} className="flex items-center gap-2.5">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-mint/15 text-mint">
+                  <Check className="h-3 w-3" />
+                </span>
+                {t}
+              </li>
+            ))}
+          </ul>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Example: borrow {usd(example, 0)}</p>
-          <dl className="mt-3 divide-y divide-slate-100 text-sm">
-            <ExampleRow label="You send" value={btc(exampleBtc)} />
-            <ExampleRow label="You receive" value={musd(example - exampleFee)} />
-            <ExampleRow label="Fee" value={musd(exampleFee)} />
-            <ExampleRow label="Interest" value={`${pct(CONFIG.userInterestRate)} / year`} />
-            <ExampleRow label="When you repay" value="Your exact BTC comes back" />
-          </dl>
-          <p className="mt-3 text-xs text-slate-400">Based on a demo BTC price of {usd(PRICE, 0)}.</p>
-        </div>
+
+        <TryIt onOpen={() => go("dashboard")} />
       </section>
 
       {/* How it works */}
-      <section id="how" className="mx-auto mt-20 max-w-4xl scroll-mt-24">
-        <h2 className="text-center text-2xl font-bold tracking-tight">How it works</h2>
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
-          <Step n={1} icon={<Wallet className="h-5 w-5" />} title="Pick an amount">
-            Choose how much MUSD you want. We show exactly how much BTC to send and what it costs.
-          </Step>
-          <Step n={2} icon={<Bitcoin className="h-5 w-5" />} title="Send BTC, get MUSD">
-            Your BTC goes into Spend's trove on Mezo as collateral. The MUSD reaches your wallet in the same
-            transaction.
-          </Step>
-          <Step n={3} icon={<RotateCcw className="h-5 w-5" />} title="Repay, get your BTC">
-            Pay back the MUSD plus interest at any time and the same amount of BTC you sent returns to you.
-          </Step>
+      <section
+        id="how"
+        className="scroll-mt-8 border-y border-white/10 bg-night-950/60 py-20"
+      >
+        <div className="mx-auto max-w-6xl px-5">
+          <h2 className="max-w-xl font-display text-4xl font-semibold tracking-tight text-white">
+            Three steps, and your Bitcoin stays yours
+          </h2>
+          <ol className="mt-12 grid gap-10 md:grid-cols-3 md:gap-8">
+            <Step n={1} title="Pick an amount">
+              Choose how much MUSD you need. You see exactly how much BTC to
+              lock and what it costs before you confirm.
+            </Step>
+            <Step n={2} title="Lock BTC, get MUSD">
+              Your BTC goes into Spend's trove on Mezo as collateral. The MUSD
+              lands in your wallet in the same transaction.
+            </Step>
+            <Step n={3} title="Repay, get your BTC">
+              Pay back the MUSD plus interest whenever you want. The same amount
+              of BTC you locked comes back to you.
+            </Step>
+          </ol>
         </div>
       </section>
 
       {/* Why */}
-      <section className="mx-auto mt-20 max-w-4xl">
-        <h2 className="text-center text-2xl font-bold tracking-tight">Why Spend</h2>
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          <Feature icon={<HandCoins className="h-5 w-5" />} title="Made for small amounts">
-            Borrow from {usd(CONFIG.minBorrow, 0)} up to {usd(CONFIG.maxBorrow, 0)}. No 1,800 MUSD minimum for you.
-          </Feature>
-          <Feature icon={<Landmark className="h-5 w-5" />} title="Your BTC stays in Mezo">
-            Every deposit lands in Mezo's own contracts, so your collateral adds to Mezo's real TVL.
-          </Feature>
-          <Feature icon={<ShieldCheck className="h-5 w-5" />} title="Safety built in">
-            You borrow at {pct(CONFIG.minUserICR)} collateral or more. Spend also pauses new loans if its own trove
-            gets too thin.
-          </Feature>
-          <Feature icon={<RotateCcw className="h-5 w-5" />} title="Simple, clear costs">
-            One {pct(CONFIG.originationFeeBps / 100, 2)} fee and {pct(CONFIG.userInterestRate)} simple interest. You see
-            both before you confirm.
-          </Feature>
+      <section className="mx-auto max-w-6xl px-5 py-20">
+        <div className="grid gap-12 lg:grid-cols-[1fr_1.4fr]">
+          <div>
+            <h2 className="font-display text-4xl font-semibold tracking-tight text-white">
+              Borrowing on Mezo starts big. Spend starts small.
+            </h2>
+            <p className="mt-5 text-mist/80">
+              Opening your own trove on Mezo needs about 1,800 MUSD. Spend keeps
+              one trove and lends from its MUSD cash buffer, so you can borrow a
+              little without opening one yourself.
+            </p>
+          </div>
+          <dl className="grid gap-x-10 sm:grid-cols-2">
+            <Feature
+              icon={<HandCoins className="h-5 w-5" />}
+              title="Made for small amounts"
+            >
+              {usd(CONFIG.minBorrow, 0)} up to {usd(CONFIG.maxBorrow, 0)}. No
+              1,800 MUSD minimum for you.
+            </Feature>
+            <Feature
+              icon={<Landmark className="h-5 w-5" />}
+              title="Your BTC stays in Mezo"
+            >
+              Every deposit lands in Mezo's own contracts, so it adds to Mezo's
+              real TVL.
+            </Feature>
+            <Feature
+              icon={<ShieldCheck className="h-5 w-5" />}
+              title="Safety built in"
+            >
+              You borrow at {pct(CONFIG.minUserICR)} collateral or more. Spend
+              also pauses new loans if its own trove gets too thin.
+            </Feature>
+            <Feature
+              icon={<RotateCcw className="h-5 w-5" />}
+              title="Clear costs"
+            >
+              One {pct(CONFIG.originationFeeBps / 100, 2)} fee and{" "}
+              {pct(CONFIG.userInterestRate)} simple interest. You see both
+              before you confirm.
+            </Feature>
+          </dl>
         </div>
       </section>
 
       {/* FAQ */}
-      <section className="mx-auto mt-20 max-w-2xl">
-        <h2 className="text-center text-2xl font-bold tracking-tight">Questions</h2>
-        <div className="mt-6 divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white">
+      <section id="faq" className="mx-auto max-w-3xl scroll-mt-8 px-5 pb-20">
+        <h2 className="font-display text-4xl font-semibold tracking-tight text-white">
+          Questions
+        </h2>
+        <div className="mt-8 divide-y divide-white/10 border-y border-white/10">
           <Faq q="Do I get my own BTC back?">
-            Yes. Spend records the exact amount of BTC you sent and returns that amount when you repay in full.
+            Yes. Spend records the exact amount of BTC you sent and returns that
+            amount when you repay in full.
           </Faq>
           <Faq q="Can I lose my collateral?">
-            If BTC drops and your collateral ratio falls to around {CONFIG.liquidationRange}, Spend can liquidate your
-            position. Your BTC is then forfeited to cover the debt, so you don't get it back. Watch your ratio on the
-            Position page. Safety ratios are targets, not guarantees against big market moves.
+            If BTC drops and your collateral ratio falls to around{" "}
+            {CONFIG.liquidationRange}, Spend can liquidate your loan. Your BTC
+            is then forfeited to cover the debt, so you don't get it back. Watch
+            your ratio on the My loan page. Safety ratios are targets, not
+            guarantees against big market moves.
           </Faq>
           <Faq q="What are redemptions?">
-            Mezo can redeem against troves, which can reduce both the collateral and the debt of Spend's trove. Spend
-            plans to share the effect across users in a transparent way (for example pro-rata). It's a known risk.
+            Mezo can redeem against troves, which can reduce both the collateral
+            and the debt of Spend's trove. Spend plans to share the effect
+            across users in a transparent way, for example pro-rata. It is a
+            known risk.
           </Faq>
           <Faq q="How many loans can I have?">
-            One open position per wallet, between {usd(CONFIG.minBorrow, 0)} and {usd(CONFIG.maxBorrow, 0)}.
+            One open loan per wallet, between {usd(CONFIG.minBorrow, 0)} and{" "}
+            {usd(CONFIG.maxBorrow, 0)}.
           </Faq>
           <Faq q="Why do I need to approve MUSD?">
-            Repaying moves MUSD from your wallet to Spend. The approval is a one-time permission for that.
+            Repaying moves MUSD from your wallet to Spend. The approval is a
+            one-time permission for that.
           </Faq>
           <Faq q="Is this live?">
             Not yet. Spend runs on Mezo Testnet, so it uses test funds only.
@@ -150,73 +192,215 @@ export default function Landing({ go }: { go: (t: Tab) => void }) {
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="mx-auto mt-20 max-w-3xl rounded-3xl bg-primary px-6 py-12 text-center text-white">
-        <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Ready to try it?</h2>
-        <p className="mx-auto mt-2 max-w-md text-primary-line">Connect a wallet and borrow your first few dollars on testnet.</p>
-        <button
-          onClick={() => go('borrow')}
-          className="mt-6 inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 text-base font-semibold text-primary hover:bg-primary-soft"
-        >
-          Launch app
-          <ArrowRight className="h-4 w-4" />
-        </button>
+      {/* Closing */}
+      {/* Closing */}
+      <section className="mx-auto max-w-6xl px-5 pb-20">
+        <div className="relative overflow-hidden rounded-[32px] border border-white/10 bg-night-800 px-6 py-12 sm:px-12 sm:py-16">
+          <div
+            className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-primary/30 blur-[90px]"
+            aria-hidden
+          />
+          <div className="relative grid items-center gap-10 md:grid-cols-[1.3fr_1fr]">
+            <div>
+              <h2 className="font-display text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+                Try your first loan on testnet
+              </h2>
+              <p className="mt-4 max-w-md text-lg text-mist/80">
+                Connect a wallet and borrow a few dollars. It takes about a
+                minute.
+              </p>
+              <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
+                <Button
+                  className="px-6 py-3.5 text-base"
+                  onClick={() => go("dashboard")}
+                >
+                  Open the app
+                </Button>
+                <span className="text-sm text-mute">
+                  Test funds only. Nothing real is at risk.
+                </span>
+              </div>
+            </div>
+
+            <div className="mx-auto w-full max-w-xs">
+              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-night-950/60 p-3.5">
+                <Coin kind="btc" size={40} />
+                <div>
+                  <p className="text-sm text-mute">You lock</p>
+                  <p className="font-display text-lg font-semibold tabular-nums text-white">
+                    {btc(sample.toSend, 6)}
+                  </p>
+                </div>
+              </div>
+              <div className="my-2 flex justify-center">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-night-700 text-primary-light">
+                  <ArrowDown className="h-4 w-4" />
+                </span>
+              </div>
+              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-night-950/60 p-3.5">
+                <Coin kind="musd" size={40} />
+                <div>
+                  <p className="text-sm text-mute">You get</p>
+                  <p className="font-display text-lg font-semibold tabular-nums text-white">
+                    {musd(sample.receive)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </section>
+
+      <footer className="border-t border-white/10 py-6 text-center text-sm text-mute">
+        Spend on {`Mezo Testnet`}. Demo data only.
+      </footer>
     </div>
-  )
+  );
 }
 
-function Fact({ value, label }: { value: string; label: string }) {
-  return (
-    <div className="bg-white px-4 py-5 text-center">
-      <p className="text-2xl font-bold tabular-nums text-slate-900">{value}</p>
-      <p className="mt-0.5 text-xs text-slate-500">{label}</p>
-    </div>
-  )
-}
+/** Live calculator: the same amount slider as the app, so people feel it before they connect. */
+function TryIt({ onOpen }: { onOpen: () => void }) {
+  const [amount, setAmount] = useState(100);
+  const q = quoteFor(amount);
+  const fill =
+    ((amount - CONFIG.minBorrow) / (CONFIG.maxBorrow - CONFIG.minBorrow)) * 100;
 
-function ExampleRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-2.5">
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="text-right font-medium tabular-nums text-slate-800">{value}</dd>
-    </div>
-  )
-}
+    <div className="relative">
+      {/* the one glow on the page */}
+      <div
+        className="pointer-events-none absolute -inset-10 rounded-full bg-primary/30 blur-[90px]"
+        aria-hidden
+      />
 
-function Step({ n, icon, title, children }: { n: number; icon: ReactNode; title: string; children: ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-soft text-primary">{icon}</span>
-        <span className="text-sm font-semibold text-slate-300">0{n}</span>
+      <div className="relative rounded-[28px] border border-white/10 bg-night-800 p-6 shadow-2xl sm:p-8">
+        <p className="text-mute">Try it. How much do you need?</p>
+        <p className="mt-1 font-display text-7xl font-semibold tabular-nums text-white">
+          <span className="text-primary-light">$</span>
+          {amount}
+        </p>
+
+        <div className="mt-6">
+          <input
+            type="range"
+            className="dial"
+            aria-label="Loan amount"
+            min={CONFIG.minBorrow}
+            max={CONFIG.maxBorrow}
+            step={5}
+            value={amount}
+            onChange={(e) => setAmount(Number(e.target.value))}
+            style={{ "--fill": `${fill}%` } as CSSProperties}
+          />
+          <div className="mt-2 flex justify-between text-xs text-mute">
+            <span>{usd(CONFIG.minBorrow, 0)}</span>
+            <span>{usd(CONFIG.maxBorrow, 0)}</span>
+          </div>
+        </div>
+
+        <div className="mt-6 space-y-3">
+          <Line
+            kind="btc"
+            label="You lock"
+            value={btc(q.toSend, 6)}
+            sub={`About ${usd(q.toSend * PRICE)}`}
+          />
+          <Line
+            kind="musd"
+            label="You get"
+            value={musd(q.receive)}
+            sub={`After a ${musd(q.fee)} fee`}
+          />
+        </div>
+
+        <p className="mt-5 text-sm text-mute">
+          BTC would have to fall about {num(q.dropPct, 1)}% before liquidation
+          risk starts.
+        </p>
+
+        <Button full className="mt-5" onClick={onOpen}>
+          Borrow {usd(amount, 0)}
+        </Button>
       </div>
-      <h3 className="mt-4 font-semibold">{title}</h3>
-      <p className="mt-1.5 text-sm text-slate-600">{children}</p>
     </div>
-  )
+  );
 }
 
-function Feature({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
+function Line({
+  kind,
+  label,
+  value,
+  sub,
+}: {
+  kind: "btc" | "musd";
+  label: string;
+  value: string;
+  sub: string;
+}) {
   return (
-    <div className="flex gap-4 rounded-2xl border border-slate-200 bg-white p-5">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">{icon}</span>
-      <div>
-        <h3 className="font-semibold">{title}</h3>
-        <p className="mt-1 text-sm text-slate-600">{children}</p>
+    <div className="flex items-center gap-3 rounded-2xl bg-night-950/60 p-3.5">
+      <Coin kind={kind} size={40} />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-mute">{label}</p>
+        <p className="truncate font-display text-lg font-semibold tabular-nums text-white">
+          {value}
+        </p>
       </div>
+      <p className="hidden text-right text-xs text-mute sm:block">{sub}</p>
     </div>
-  )
+  );
+}
+
+function Step({
+  n,
+  title,
+  children,
+}: {
+  n: number;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <li>
+      <span className="flex h-12 w-12 items-center justify-center rounded-full border border-primary/50 bg-primary/15 font-display text-lg font-bold text-primary-light">
+        {n}
+      </span>
+      <h3 className="mt-5 font-display text-xl font-semibold text-white">
+        {title}
+      </h3>
+      <p className="mt-2 text-mist/75">{children}</p>
+    </li>
+  );
+}
+
+function Feature({
+  icon,
+  title,
+  children,
+}: {
+  icon: ReactNode;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="border-t border-white/10 py-6 first:border-t-0 sm:[&:nth-child(2)]:border-t-0">
+      <dt className="flex items-center gap-2.5 font-display text-lg font-semibold text-white">
+        <span className="text-primary-light">{icon}</span>
+        {title}
+      </dt>
+      <dd className="mt-2 text-mist/75">{children}</dd>
+    </div>
+  );
 }
 
 function Faq({ q, children }: { q: string; children: ReactNode }) {
   return (
-    <details className="group px-5 py-4">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+    <details className="group py-5">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-display text-lg font-semibold text-white [&::-webkit-details-marker]:hidden">
         {q}
-        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+        <ChevronDown className="h-5 w-5 shrink-0 text-mute transition-transform group-open:rotate-180" />
       </summary>
-      <p className="mt-2 text-sm text-slate-600">{children}</p>
+      <p className="mt-3 max-w-2xl text-mist/75">{children}</p>
     </details>
-  )
+  );
 }

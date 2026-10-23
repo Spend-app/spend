@@ -31,6 +31,7 @@ export const CONFIG = {
 
 /** Spend's master trove on Mezo */
 export const MASTER = {
+  opened: true, // set to false to preview the one-time reserve setup card on the Admin screen
   collateral: 0.062, // BTC
   debt: 2202, // MUSD (principal + fee + gas comp)
   cashBuffer: 1640, // MUSD

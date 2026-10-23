@@ -1,11 +1,21 @@
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400..700&display=swap");
 @import "tailwindcss";
 
 @theme {
+  /* Purple is only for actions, the active menu item and the progress bar */
   --color-primary: #7c3aed;
   --color-primary-dark: #6d28d9;
-  --color-primary-soft: #f5f3ff;
-  --color-primary-line: #ddd6fe;
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-primary-soft: #f4efff;
+
+  --color-ink: #15131f;
+  --color-mute: #5b5870;
+  --color-line: #e6e4ee;
+  --color-soft: #f6f5fa;
+
+  --color-btc: #f7931a;
+
+  --font-sans: "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Bricolage Grotesque", "Figtree", ui-sans-serif, system-ui, sans-serif;
 }
 
 html,
@@ -16,10 +26,21 @@ body,
 
 body {
   margin: 0;
-  background: #fafafb;
-  color: #0f172a;
+  background: #ffffff;
+  color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: rgba(124, 58, 237, 0.2);
+}
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
 }
 
 input[type="number"]::-webkit-outer-spin-button,
@@ -29,4 +50,12 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 input[type="number"] {
   -moz-appearance: textfield;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -1,1 +1,1 @@
-export type Tab = 'home' | 'borrow' | 'position' | 'admin'
+export type Tab = 'dashboard' | 'borrow' | 'position'

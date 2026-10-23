@@ -1,14 +1,16 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
-import { ArrowDown, Info, PauseCircle } from "lucide-react";
+import { ArrowRight, Info, PauseCircle } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { CONFIG, PRICE } from "../data/mock";
-import { btc, musd, pct, usd } from "../lib/format";
-import Balances from "../components/Balances";
+import { quoteFor } from "../lib/quote";
+import { btc, musd, num, pct, usd } from "../lib/format";
+import Coin from "../components/Coin";
+import SafetyBar from "../components/SafetyBar";
 import { Button, Card, Notice, Row } from "../components/ui";
 import type { Tab } from "../types";
 
-const QUICK = [10, 50, 100, 250];
+const QUICK = [10, 50, 100, 250, 500];
 
 export default function Borrow({ go }: { go: (t: Tab) => void }) {
   const { connected, connect, position, paused, borrow, btcBalance } = useApp();
@@ -16,18 +18,15 @@ export default function Borrow({ go }: { go: (t: Tab) => void }) {
   const [busy, setBusy] = useState(false);
 
   const n = Number(amount) || 0;
-  const fee = (n * CONFIG.originationFeeBps) / 10_000;
-  const receive = n - fee;
-  const required = (n * CONFIG.minUserICR) / 100 / PRICE;
-  const toSend = required * CONFIG.priceDriftBuffer;
+  const q = quoteFor(n);
 
   let error: string | null = null;
   if (n > 0 && n < CONFIG.minBorrow)
-    error = `Minimum is ${musd(CONFIG.minBorrow, 0)}`;
+    error = `The smallest loan is ${usd(CONFIG.minBorrow, 0)}.`;
   else if (n > CONFIG.maxBorrow)
-    error = `Maximum is ${musd(CONFIG.maxBorrow, 0)}`;
-  else if (connected && n > 0 && toSend > btcBalance)
-    error = "Not enough BTC in your wallet";
+    error = `The largest loan is ${usd(CONFIG.maxBorrow, 0)}.`;
+  else if (connected && n > 0 && q.toSend > btcBalance)
+    error = "You do not have enough Bitcoin in your wallet for this amount.";
 
   const blocked = paused || !!position;
   const canSubmit = n >= CONFIG.minBorrow && !error && !blocked;
@@ -36,12 +35,11 @@ export default function Borrow({ go }: { go: (t: Tab) => void }) {
     if (!connected) return connect();
     setBusy(true);
     try {
-      await toast.promise(borrow(n, toSend), {
-        loading: "Waiting for confirmation…",
-        success: `You received ${musd(receive)}`,
-        error: "Transaction failed",
+      await toast.promise(borrow(n, q.toSend), {
+        loading: "Confirm in your wallet…",
+        success: `Done. ${musd(q.receive)} is in your wallet`,
+        error: "That didn't go through. Please try again.",
       });
-      setAmount("");
       go("position");
     } finally {
       setBusy(false);
@@ -49,141 +47,178 @@ export default function Borrow({ go }: { go: (t: Tab) => void }) {
   };
 
   return (
-    <div className="mx-auto max-w-lg">
-      <div className="mb-6 text-center">
-        <h1 className="text-2xl font-bold tracking-tight">
-          Borrow small, keep your Bitcoin
-        </h1>
-        <p className="mt-2 text-sm text-slate-500">
-          Lock a little BTC and get {usd(CONFIG.minBorrow, 0)}–
-          {usd(CONFIG.maxBorrow, 0)} in MUSD. Repay any time to get your exact
-          BTC back.
-        </p>
+    <div className="grid gap-5 lg:grid-cols-5">
+      <div className="space-y-4 lg:col-span-3">
+        {paused && (
+          <Notice tone="amber" icon={<PauseCircle className="h-4 w-4" />}>
+            New loans are paused for now. You can still repay a loan you already
+            have.
+          </Notice>
+        )}
+        {position && (
+          <Notice tone="violet" icon={<Info className="h-4 w-4" />}>
+            You already have a loan. Repay it to borrow again.{" "}
+            <button
+              onClick={() => go("position")}
+              className="font-semibold underline underline-offset-2"
+            >
+              See my loan
+            </button>
+          </Notice>
+        )}
+
+        <Card>
+          <label htmlFor="amount" className="text-sm font-medium text-ink">
+            How much do you want to borrow?
+          </label>
+          <div
+            className={`mt-2 flex items-center rounded-xl border px-4 focus-within:ring-2 ${
+              error
+                ? "border-red-400 focus-within:ring-red-100"
+                : "border-line focus-within:border-primary focus-within:ring-primary/15"
+            } ${blocked ? "bg-soft" : "bg-white"}`}
+          >
+            <span className="text-lg text-mute">$</span>
+            <input
+              id="amount"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              disabled={blocked}
+              className="w-full bg-transparent py-3.5 pl-2 text-lg font-semibold tabular-nums text-ink outline-none placeholder:font-normal placeholder:text-mute/60"
+            />
+            <span className="text-sm font-semibold text-mute">MUSD</span>
+          </div>
+          <p
+            className={`mt-2 text-sm ${error ? "font-medium text-red-700" : "text-mute"}`}
+          >
+            {error ??
+              `You can borrow between ${usd(CONFIG.minBorrow, 0)} and ${usd(CONFIG.maxBorrow, 0)}.`}
+          </p>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {QUICK.filter(
+              (v) => v >= CONFIG.minBorrow && v <= CONFIG.maxBorrow,
+            ).map((v) => (
+              <button
+                key={v}
+                type="button"
+                disabled={blocked}
+                onClick={() => setAmount(String(v))}
+                className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                  n === v
+                    ? "border-primary bg-primary-soft text-primary-dark"
+                    : "border-line text-ink hover:border-primary/50"
+                }`}
+              >
+                ${v}
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        <div className="grid items-center gap-3 sm:grid-cols-[1fr_auto_1fr]">
+          <Ticket
+            kind="btc"
+            label="You lock"
+            value={n > 0 ? btc(q.toSend, 6) : "0 BTC"}
+            sub={n > 0 ? `About ${usd(q.toSend * PRICE)}` : "Enter an amount"}
+          />
+          <span className="mx-auto flex h-8 w-8 rotate-90 items-center justify-center rounded-full border border-line bg-white text-mute sm:rotate-0">
+            <ArrowRight className="h-4 w-4" />
+          </span>
+          <Ticket
+            kind="musd"
+            label="You get"
+            value={n > 0 ? musd(q.receive) : "0 MUSD"}
+            sub={n > 0 ? `After a ${musd(q.fee)} fee` : "Enter an amount"}
+          />
+        </div>
+
+        <Button
+          full
+          loading={busy}
+          disabled={connected && !canSubmit}
+          onClick={submit}
+        >
+          {!connected
+            ? "Connect wallet to borrow"
+            : position
+              ? "You already have a loan"
+              : paused
+                ? "Loans are paused"
+                : `Borrow ${n > 0 ? usd(n, 0) : ""}`.trim()}
+        </Button>
       </div>
 
-      {connected && (
-        <div className="my-4">
-          <Balances />
-        </div>
-      )}
+      <div className="lg:col-span-2">
+        <Card className="lg:sticky lg:top-20">
+          <h2 className="font-display text-base font-semibold text-ink">
+            Before you confirm
+          </h2>
+          <div className="mt-2 divide-y divide-line">
+            <Row
+              label={`Fee (${pct(CONFIG.originationFeeBps / 100, 2)}, paid once)`}
+              value={n > 0 ? musd(q.fee) : "—"}
+            />
+            <Row
+              label="Interest"
+              value={`${pct(CONFIG.userInterestRate)} a year`}
+            />
+            <Row label="Bitcoin price" value={usd(PRICE)} />
+            {connected && (
+              <Row label="Your Bitcoin" value={btc(btcBalance, 5)} />
+            )}
+          </div>
 
-      {paused && (
-        <div className="mb-4">
-          <Notice tone="amber" icon={<PauseCircle className="h-4 w-4" />}>
-            New borrowing is paused right now. Repaying still works.
-          </Notice>
-        </div>
-      )}
-
-      <Card>
-        <label htmlFor="amount" className="text-sm font-medium text-slate-700">
-          I want to borrow
-        </label>
-        <div
-          className={`mt-2 flex items-center rounded-xl border bg-slate-50 px-4 py-3 focus-within:border-primary focus-within:bg-white focus-within:ring-2 focus-within:ring-primary/20 ${
-            error ? "border-red-300" : "border-slate-200"
-          }`}
-        >
-          <input
-            id="amount"
-            type="number"
-            inputMode="decimal"
-            min={0}
-            placeholder="0.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            disabled={blocked}
-            className="w-full bg-transparent text-2xl font-semibold tabular-nums outline-none placeholder:text-slate-300"
-          />
-          <span className="ml-3 rounded-lg bg-white px-2.5 py-1 text-sm font-semibold text-slate-600 ring-1 ring-slate-200">
-            MUSD
-          </span>
-        </div>
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-
-        <div className="mt-3 flex gap-2">
-          {QUICK.map((q) => (
-            <button
-              key={q}
-              disabled={blocked}
-              onClick={() => setAmount(String(q))}
-              className="flex-1 rounded-lg border border-slate-200 py-1.5 text-sm font-medium text-slate-600 hover:border-primary hover:text-primary disabled:opacity-50"
-            >
-              ${q}
-            </button>
-          ))}
-        </div>
-
-        <div className="my-4 flex justify-center">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400">
-            <ArrowDown className="h-4 w-4" />
-          </span>
-        </div>
-
-        <div className="rounded-xl bg-primary-soft px-4 py-3">
-          <p className="text-xs font-medium text-primary">You send</p>
-          <p className="mt-0.5 text-xl font-semibold tabular-nums text-slate-900">
-            {n > 0 ? btc(toSend, 6) : "— BTC"}
-          </p>
-          {n > 0 && (
-            <p className="text-xs text-slate-500">
-              ≈ {usd(toSend * PRICE)} locked as collateral
+          <div className="mt-4 rounded-xl bg-soft p-4">
+            <p className="text-sm font-semibold text-ink">
+              How safe is your loan?
             </p>
-          )}
-        </div>
+            <p className="mt-1 text-sm text-mute">
+              {n > 0
+                ? `If Bitcoin's price falls about ${num(q.dropPct, 1)}% (to ${usd(q.liqPrice, 0)}), your loan would be at risk and your locked Bitcoin could be taken to cover it.`
+                : "Enter an amount to see how far the price can fall."}
+            </p>
+            <div className="mt-3">
+              <SafetyBar ratio={q.ratio || CONFIG.minUserICR} />
+            </div>
+          </div>
 
-        <div className="mt-4 divide-y divide-slate-100">
-          <Row label="You receive" value={n > 0 ? musd(receive) : "—"} strong />
-          <Row
-            label={`Origination fee (${pct(CONFIG.originationFeeBps / 100, 2)})`}
-            value={n > 0 ? musd(fee) : "—"}
-          />
-          <Row
-            label="Interest (simple)"
-            value={`${pct(CONFIG.userInterestRate)} / year`}
-          />
-          <Row
-            label="Collateral ratio"
-            value={`${pct(CONFIG.minUserICR)} minimum`}
-          />
-          <Row label="Liquidation risk below" value={CONFIG.liquidationRange} />
-          <Row label="BTC price" value={usd(PRICE)} />
-        </div>
+          <p className="mt-4 flex gap-2 text-xs text-mute">
+            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            We ask for 1% extra Bitcoin in case the price moves. You get all of
+            it back when you repay.
+          </p>
+        </Card>
+      </div>
+    </div>
+  );
+}
 
-        <div className="mt-5">
-          <Button
-            full
-            loading={busy}
-            disabled={connected && !canSubmit}
-            onClick={submit}
-          >
-            {!connected
-              ? "Connect wallet"
-              : position
-                ? "You already have an open position"
-                : paused
-                  ? "Borrowing paused"
-                  : "Borrow MUSD"}
-          </Button>
-        </div>
-
-        {position && (
-          <button
-            onClick={() => go("position")}
-            className="mt-3 w-full text-center text-sm font-medium text-primary hover:underline"
-          >
-            View my position
-          </button>
-        )}
-      </Card>
-
-      <div className="mt-4 flex items-start gap-2 px-1 text-xs text-slate-500">
-        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-        <p>
-          We add a 1% cushion to the BTC quote to cover price moves. It all
-          stays in your collateral and comes back to you when you repay. One
-          position per wallet.
+function Ticket({
+  kind,
+  label,
+  value,
+  sub,
+}: {
+  kind: "btc" | "musd";
+  label: string;
+  value: string;
+  sub: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl bg-soft p-4">
+      <Coin kind={kind} size={40} />
+      <div className="min-w-0">
+        <p className="text-sm text-mute">{label}</p>
+        <p className="truncate font-display text-lg font-semibold tabular-nums text-ink">
+          {value}
         </p>
+        <p className="truncate text-xs text-mute">{sub}</p>
       </div>
     </div>
   );
