@@ -170,7 +170,7 @@ export default function Admin() {
           </div>
           <div className="flex items-center gap-3">
             <a
-              href="#/"
+              href="/"
               className="hidden text-sm font-semibold text-mute hover:text-ink sm:block"
             >
               Go to borrower app

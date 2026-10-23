@@ -7,17 +7,25 @@ import Position from "./pages/Position";
 import Admin from "./pages/Admin";
 import type { Tab } from "./types";
 
-/** Admin lives on its own address: open the site with #/admin at the end. */
+/** Admin lives on its own address: open the site with /admin at the end. */
 function useIsAdmin() {
-  const [isAdmin, setIsAdmin] = useState(() =>
-    window.location.hash.startsWith("/admin"),
-  );
+  const checkAdmin = () => {
+    const hash = window.location.hash.replace(/^#/, "");
+    return hash.startsWith("/admin") || window.location.pathname.startsWith("/admin");
+  };
+
+  const [isAdmin, setIsAdmin] = useState(checkAdmin);
+
   useEffect(() => {
-    const onChange = () =>
-      setIsAdmin(window.location.hash.startsWith("/admin"));
+    const onChange = () => setIsAdmin(checkAdmin());
     window.addEventListener("hashchange", onChange);
-    return () => window.removeEventListener("hashchange", onChange);
+    window.addEventListener("popstate", onChange);
+    return () => {
+      window.removeEventListener("hashchange", onChange);
+      window.removeEventListener("popstate", onChange);
+    };
   }, []);
+
   return isAdmin;
 }
 

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import {
   HandCoins,
   LayoutDashboard,
+  Shield,
   Wallet,
   Zap,
   type LucideIcon,
@@ -26,7 +27,7 @@ export default function AppShell({
   onTab: (t: Tab) => void;
   children: ReactNode;
 }) {
-  const { connected, address, connect } = useApp();
+  const { connected, address, connect, isOwner } = useApp();
   const current = NAV.find((n) => n.id === tab);
 
   return (
@@ -44,7 +45,7 @@ export default function AppShell({
                 key={item.id}
                 onClick={() => onTab(item.id)}
                 aria-current={active ? "page" : undefined}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors ${
+                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors cursor-pointer ${
                   active
                     ? "bg-primary-soft text-primary-dark"
                     : "text-mute hover:bg-soft hover:text-ink"
@@ -55,6 +56,16 @@ export default function AppShell({
               </button>
             );
           })}
+
+          {isOwner && (
+            <a
+              href="#/admin"
+              className="mt-4 flex w-full items-center gap-3 rounded-xl bg-purple-50 px-3 py-2.5 text-sm font-semibold text-purple-700 hover:bg-purple-100 transition-colors"
+            >
+              <Shield className="h-5 w-5" />
+              Admin Panel
+            </a>
+          )}
         </nav>
 
         <div className="mt-auto">
@@ -73,6 +84,15 @@ export default function AppShell({
           </h1>
 
           <div className="flex items-center gap-2">
+            {isOwner && (
+              <a
+                href="#/admin"
+                className="flex items-center gap-1.5 rounded-xl border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-100"
+              >
+                <Shield className="h-3.5 w-3.5" />
+                Admin
+              </a>
+            )}
             <span className="hidden whitespace-nowrap rounded-full bg-soft px-3 py-1.5 text-sm font-semibold text-mute sm:inline">
               Test mode
             </span>
