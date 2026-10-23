@@ -1,8 +1,7 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
-import { ArrowRight, Info, PauseCircle } from "lucide-react";
+import { AlertCircle, ArrowRight, Info, PauseCircle } from "lucide-react";
 import { useApp } from "../context/AppContext";
-import { CONFIG, PRICE } from "../data/mock";
 import { quoteFor } from "../lib/quote";
 import { btc, musd, num, pct, usd } from "../lib/format";
 import Coin from "../components/Coin";
@@ -13,34 +12,55 @@ import type { Tab } from "../types";
 const QUICK = [10, 50, 100, 250, 500];
 
 export default function Borrow({ go }: { go: (t: Tab) => void }) {
-  const { connected, connect, position, paused, borrow, btcBalance } = useApp();
+  const {
+    connected,
+    connect,
+    position,
+    paused,
+    borrow,
+    btcBalance,
+    config,
+    price,
+    isWrongNetwork,
+    switchToMezo,
+  } = useApp();
+
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
 
   const n = Number(amount) || 0;
-  const q = quoteFor(n);
+  const q = quoteFor(n, config, price);
 
   let error: string | null = null;
-  if (n > 0 && n < CONFIG.minBorrow)
-    error = `The smallest loan is ${usd(CONFIG.minBorrow, 0)}.`;
-  else if (n > CONFIG.maxBorrow)
-    error = `The largest loan is ${usd(CONFIG.maxBorrow, 0)}.`;
+  if (n > 0 && n < config.minBorrow)
+    error = `The smallest loan is ${usd(config.minBorrow, 0)}.`;
+  else if (n > config.maxBorrow)
+    error = `The largest loan is ${usd(config.maxBorrow, 0)}.`;
   else if (connected && n > 0 && q.toSend > btcBalance)
     error = "You do not have enough Bitcoin in your wallet for this amount.";
 
   const blocked = paused || !!position;
-  const canSubmit = n >= CONFIG.minBorrow && !error && !blocked;
+  const canSubmit = n >= config.minBorrow && !error && !blocked;
 
   const submit = async () => {
     if (!connected) return connect();
+    if (isWrongNetwork) {
+      await switchToMezo();
+      return;
+    }
     setBusy(true);
     try {
       await toast.promise(borrow(n, q.toSend), {
         loading: "Confirm in your wallet…",
         success: `Done. ${musd(q.receive)} is in your wallet`,
-        error: "That didn't go through. Please try again.",
+        error: (err) =>
+          err instanceof Error && err.message
+            ? err.message
+            : "That didn't go through. Please try again.",
       });
       go("position");
+    } catch {
+      // toast handles the error display
     } finally {
       setBusy(false);
     }
@@ -49,6 +69,17 @@ export default function Borrow({ go }: { go: (t: Tab) => void }) {
   return (
     <div className="grid gap-5 lg:grid-cols-5">
       <div className="space-y-4 lg:col-span-3">
+        {isWrongNetwork && (
+          <Notice tone="amber" icon={<AlertCircle className="h-4 w-4" />}>
+            Your wallet is connected to the wrong network.{" "}
+            <button
+              onClick={switchToMezo}
+              className="font-semibold underline underline-offset-2"
+            >
+              Switch to Mezo Testnet
+            </button>
+          </Notice>
+        )}
         {paused && (
           <Notice tone="amber" icon={<PauseCircle className="h-4 w-4" />}>
             New loans are paused for now. You can still repay a loan you already
@@ -96,19 +127,19 @@ export default function Borrow({ go }: { go: (t: Tab) => void }) {
             className={`mt-2 text-sm ${error ? "font-medium text-red-700" : "text-mute"}`}
           >
             {error ??
-              `You can borrow between ${usd(CONFIG.minBorrow, 0)} and ${usd(CONFIG.maxBorrow, 0)}.`}
+              `You can borrow between ${usd(config.minBorrow, 0)} and ${usd(config.maxBorrow, 0)}.`}
           </p>
 
           <div className="mt-4 flex flex-wrap gap-2">
             {QUICK.filter(
-              (v) => v >= CONFIG.minBorrow && v <= CONFIG.maxBorrow,
+              (v) => v >= config.minBorrow && v <= config.maxBorrow,
             ).map((v) => (
               <button
                 key={v}
                 type="button"
                 disabled={blocked}
                 onClick={() => setAmount(String(v))}
-                className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                className={`rounded-full border px-4 py-1.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer ${
                   n === v
                     ? "border-primary bg-primary-soft text-primary-dark"
                     : "border-line text-ink hover:border-primary/50"
@@ -125,7 +156,7 @@ export default function Borrow({ go }: { go: (t: Tab) => void }) {
             kind="btc"
             label="You lock"
             value={n > 0 ? btc(q.toSend, 6) : "0 BTC"}
-            sub={n > 0 ? `About ${usd(q.toSend * PRICE)}` : "Enter an amount"}
+            sub={n > 0 ? `About ${usd(q.toSend * price)}` : "Enter an amount"}
           />
           <span className="mx-auto flex h-8 w-8 rotate-90 items-center justify-center rounded-full border border-line bg-white text-mute sm:rotate-0">
             <ArrowRight className="h-4 w-4" />
@@ -146,11 +177,13 @@ export default function Borrow({ go }: { go: (t: Tab) => void }) {
         >
           {!connected
             ? "Connect wallet to borrow"
-            : position
-              ? "You already have a loan"
-              : paused
-                ? "Loans are paused"
-                : `Borrow ${n > 0 ? usd(n, 0) : ""}`.trim()}
+            : isWrongNetwork
+              ? "Switch to Mezo Testnet"
+              : position
+                ? "You already have a loan"
+                : paused
+                  ? "Loans are paused"
+                  : `Borrow ${n > 0 ? usd(n, 0) : ""}`.trim()}
         </Button>
       </div>
 
@@ -161,14 +194,14 @@ export default function Borrow({ go }: { go: (t: Tab) => void }) {
           </h2>
           <div className="mt-2 divide-y divide-line">
             <Row
-              label={`Fee (${pct(CONFIG.originationFeeBps / 100, 2)}, paid once)`}
+              label={`Fee (${pct(config.originationFeeBps / 100, 2)}, paid once)`}
               value={n > 0 ? musd(q.fee) : "—"}
             />
             <Row
               label="Interest"
-              value={`${pct(CONFIG.userInterestRate)} a year`}
+              value={`${pct(config.userInterestRate)} a year`}
             />
-            <Row label="Bitcoin price" value={usd(PRICE)} />
+            <Row label="Bitcoin price" value={usd(price)} />
             {connected && (
               <Row label="Your Bitcoin" value={btc(btcBalance, 5)} />
             )}
@@ -178,21 +211,25 @@ export default function Borrow({ go }: { go: (t: Tab) => void }) {
             <p className="text-sm font-semibold text-ink">
               How safe is your loan?
             </p>
-            <p className="mt-1 text-sm text-mute">
-              {n > 0
-                ? `If Bitcoin's price falls about ${num(q.dropPct, 1)}% (to ${usd(q.liqPrice, 0)}), your loan would be at risk and your locked Bitcoin could be taken to cover it.`
-                : "Enter an amount to see how far the price can fall."}
-            </p>
             <div className="mt-3">
-              <SafetyBar ratio={q.ratio || CONFIG.minUserICR} />
+              <SafetyBar ratio={q.ratio} />
+            </div>
+
+            <div className="mt-4 space-y-2 border-t border-line/60 pt-3 text-xs text-mute">
+              <div className="flex justify-between">
+                <span>Safe if Bitcoin stays above</span>
+                <span className="font-medium text-ink">
+                  {n > 0 ? usd(q.liqPrice) : "—"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Bitcoin can fall by</span>
+                <span className="font-medium text-ink">
+                  {n > 0 ? num(q.dropPct, 0) + "%" : "—"}
+                </span>
+              </div>
             </div>
           </div>
-
-          <p className="mt-4 flex gap-2 text-xs text-mute">
-            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            We ask for 1% extra Bitcoin in case the price moves. You get all of
-            it back when you repay.
-          </p>
         </Card>
       </div>
     </div>
@@ -211,11 +248,11 @@ function Ticket({
   sub: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-soft p-4">
-      <Coin kind={kind} size={40} />
-      <div className="min-w-0">
-        <p className="text-sm text-mute">{label}</p>
-        <p className="truncate font-display text-lg font-semibold tabular-nums text-ink">
+    <div className="flex items-center gap-3 rounded-2xl border border-line bg-white p-3.5">
+      <Coin kind={kind} size={36} />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-medium text-mute">{label}</p>
+        <p className="font-display text-lg font-semibold tabular-nums text-ink">
           {value}
         </p>
         <p className="truncate text-xs text-mute">{sub}</p>

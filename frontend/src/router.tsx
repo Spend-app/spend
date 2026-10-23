@@ -1,6 +1,8 @@
-import Homepage from "./pages/Homepage";
+import Landing from "./pages/Landing";
 import { createBrowserRouter } from "react-router-dom";
 
-const router = createBrowserRouter([{ path: "/", element: <Homepage /> }]);
+const router = createBrowserRouter([
+  { path: "/", element: <Landing go={() => {}} /> },
+]);
 
 export default router;

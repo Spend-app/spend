@@ -29,6 +29,7 @@ const networks = [mezoTestnet] as [AppKitNetwork, ...AppKitNetwork[]];
 const wagmiAdapter = new WagmiAdapter({
   projectId,
   networks,
+  ssr: true,
 });
 
 createAppKit({
@@ -48,7 +49,7 @@ const queryClient = new QueryClient();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <WagmiProvider config={wagmiAdapter.wagmiConfig}>
+    <WagmiProvider config={wagmiAdapter.wagmiConfig as any}>
       <QueryClientProvider client={queryClient}>
         <AppProvider>
           <App />
