@@ -1,4 +1,4 @@
-import { CONFIG } from '../data/mock'
+import { LIQUIDATION_START } from '../data/static'
 
 interface Props {
   /** Current safety level in % (for example 152) */
@@ -18,8 +18,8 @@ export default function SafetyBar({
   ratio,
   min = 120,
   max = 200,
-  mark = CONFIG.liquidationStart,
-  markLabel = `Risky below ${CONFIG.liquidationStart}%`,
+  mark = LIQUIDATION_START,
+  markLabel = `Risky below ${LIQUIDATION_START}%`,
 }: Props) {
   const at = (v: number) => `${Math.min(100, Math.max(0, ((v - min) / (max - min)) * 100))}%`
 

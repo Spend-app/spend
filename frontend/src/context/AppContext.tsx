@@ -2,7 +2,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useState,
   type ReactNode,
 } from "react";
 import {
@@ -26,12 +28,15 @@ import {
 } from "../config/contracts";
 import { erc20Abi, spendAbi } from "../abi";
 import { getHints } from "../lib/hints";
-
-// Off-chain policy constants. There are no on-chain getters for these, so they
-// live in the client config rather than as mock/demo fallback data.
-const PRICE_DRIFT_BUFFER = 1.01; // quote +1% margin for block-to-block price drift
-const LIQUIDATION_RANGE = "130–140%"; // internal liquidation zone (from the proposal)
-const LIQUIDATION_START = 140; // top of that zone, used as the conservative warning line
+import { fetchMUSDPrice } from "../lib/musdPrice";
+import {
+  LIQUIDATION_RANGE,
+  LIQUIDATION_START,
+  PRICE_DRIFT_BUFFER,
+} from "../data/static";
+// Off-chain policy constants (Liquidation range/start, quote drift buffer).
+// There are no on-chain getters for these, so they live in src/data/static.ts
+// instead of as mock/demo fallback data.
 
 /** Format a bigint on-chain value, or 0 when the read has not resolved yet. */
 const toNum = (v: bigint | undefined, decimals = 18) =>
@@ -84,6 +89,7 @@ interface AppState {
   position: Position | null;
   paused: boolean;
   price: number;
+  musdPrice: number;
   config: AppConfig;
   masterState: MasterState;
   isOwner: boolean;
@@ -138,6 +144,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await switchChainAsync({ chainId: mezoTestnet.id });
     }
   }, [switchChainAsync]);
+
+  // Live MUSD → USD price from CoinGecko, refreshed every 60s. 0 until loaded.
+  const [musdPrice, setMusdPrice] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const loadPrice = async () => {
+      try {
+        const p = await fetchMUSDPrice();
+        if (alive) setMusdPrice(p);
+      } catch {
+        // Keep the last known value; retry on the next tick.
+      }
+    };
+    loadPrice();
+    const id = window.setInterval(loadPrice, 60_000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, []);
 
   const connect = useCallback(() => {
     open();
@@ -362,20 +388,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const principal = toNum(troveStateRaw?.[1], 18);
     const interest = toNum(troveStateRaw?.[2], 18);
     const compositeDebt = principal + interest;
-
-    console.log("State:", {
-      opened: masterOpened,
-      collateral,
-      debt: compositeDebt,
-      cashBuffer: toNum(cashBufferRaw, 18),
-      icr: toNum(masterICRRaw, 16),
-      tcr: toNum(masterTCRRaw, 16),
-      mezoRateBps: mezoRateBpsRaw ?? 0,
-      recoveryMode: Boolean(recoveryModeRaw),
-      totalUserPrincipal: toNum(totalUserPrincipalRaw, 18),
-      grossFees: toNum(grossFeesRaw, 18),
-      owner,
-    });
 
     return {
       opened: masterOpened,
@@ -847,6 +859,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       position,
       paused,
       price,
+      musdPrice,
       config,
       masterState,
       isOwner,
@@ -886,6 +899,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       position,
       paused,
       price,
+      musdPrice,
       config,
       masterState,
       isOwner,

@@ -1,6 +1,5 @@
 import { AlertCircle, LogOut, Wallet } from "lucide-react";
 import { useApp } from "../context/AppContext";
-import { MUSD_PRICE } from "../data/mock";
 import { num, short, usd } from "../lib/format";
 import Coin from "./Coin";
 import { Button } from "./ui";
@@ -12,6 +11,7 @@ export default function WalletCard() {
     address,
     btcBalance,
     musdBalance,
+    musdPrice,
     connect,
     disconnect,
     isWrongNetwork,
@@ -78,7 +78,7 @@ export default function WalletCard() {
             kind="musd"
             name="MUSD"
             amount={`${num(musdBalance, 2)} MUSD`}
-            value={usd(musdBalance * MUSD_PRICE)}
+            value={usd(musdBalance * musdPrice)}
           />
         </div>
       )}

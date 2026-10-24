@@ -3,7 +3,6 @@ import toast from "react-hot-toast";
 import { AlertCircle, Check, HandCoins, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
-import { MUSD_PRICE } from "../data/mock";
 import { accruedInterest, icr, useNow } from "../lib/calc";
 import { btc, musd, num, pct, usd } from "../lib/format";
 import SafetyBar from "../components/SafetyBar";
@@ -30,6 +29,7 @@ export default function Position({ go }: { go?: (t: Tab) => void }) {
     repay,
     config,
     price,
+    musdPrice,
     isWrongNetwork,
     switchToMezo,
   } = useApp();
@@ -144,7 +144,7 @@ export default function Position({ go }: { go?: (t: Tab) => void }) {
               {musd(owed, 4)}
             </p>
             <p className="mt-1 text-sm text-mute">
-              About {usd(owed * MUSD_PRICE)}. It grows a little every second.
+              About {usd(owed * musdPrice)}. It grows a little every second.
             </p>
           </div>
           <Badge tone={status.tone}>{status.label}</Badge>
@@ -169,7 +169,7 @@ export default function Position({ go }: { go?: (t: Tab) => void }) {
         <Stat
           label="You borrowed"
           value={musd(position.principal)}
-          sub={`About ${usd(position.principal * MUSD_PRICE)}`}
+          sub={`About ${usd(position.principal * musdPrice)}`}
         />
         <Stat
           label="Interest so far"

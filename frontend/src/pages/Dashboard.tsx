@@ -1,7 +1,6 @@
 import { HandCoins, Wallet } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
-import { MUSD_PRICE } from "../data/mock";
 import { accruedInterest, icr, useNow } from "../lib/calc";
 import { btc, musd, num, pct, usd } from "../lib/format";
 import Coin from "../components/Coin";
@@ -19,13 +18,14 @@ export default function Dashboard({ go }: { go?: (t: Tab) => void }) {
     position,
     config,
     price,
+    musdPrice,
   } = useApp();
   const now = useNow(1000);
 
   const toPosition = () => (go ? go("position") : navigate("/position"));
   const toBorrow = () => (go ? go("borrow") : navigate("/borrow"));
 
-  const total = btcBalance * price + musdBalance * MUSD_PRICE;
+  const total = btcBalance * price + musdBalance * musdPrice;
 
   const owed = position
     ? position.principal +
@@ -66,7 +66,7 @@ export default function Dashboard({ go }: { go?: (t: Tab) => void }) {
                   kind="musd"
                   name="MUSD"
                   amount={`${num(musdBalance, 2)} MUSD`}
-                  value={usd(musdBalance * MUSD_PRICE)}
+                  value={usd(musdBalance * musdPrice)}
                 />
               </div>
             </>

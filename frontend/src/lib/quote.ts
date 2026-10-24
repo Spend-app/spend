@@ -1,15 +1,12 @@
-import { CONFIG as DEFAULT_CONFIG, PRICE as DEFAULT_PRICE } from "../data/mock";
 import type { AppConfig } from "../context/AppContext";
 import { icr } from "./calc";
 
-/** What a loan of `n` MUSD costs and how safe it is, using live or default settings. */
-export function quoteFor(
-  n: number,
-  config: AppConfig = DEFAULT_CONFIG,
-  price: number = DEFAULT_PRICE,
-) {
-  // No fake/scaled price: if the live price hasn't resolved yet, quote zeros and
-  // let the UI re-render the moment the real price arrives.
+/**
+ * What a loan of `n` MUSD costs and how safe it is, using the live
+ * on-chain config and price. If the price hasn't resolved yet (0), quotes
+ * come back as 0 rather than guessing at a market price.
+ */
+export function quoteFor(n: number, config: AppConfig, price: number) {
   const activePrice = price > 0 ? price : 0;
   const fee = (n * config.originationFeeBps) / 10_000;
   const required =
