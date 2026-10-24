@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import {
   Activity,
   AlertCircle,
-  ArrowLeft,
   Coins,
   LayoutDashboard,
   Lock,
@@ -166,14 +165,6 @@ export default function AdminShell({ children }: { children?: ReactNode }) {
             <Badge tone={paused ? "amber" : "green"}>
               {paused ? "Loans Paused" : "Loans Active"}
             </Badge>
-
-            <Link
-              to="/"
-              className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink hover:bg-soft transition-colors"
-            >
-              <ArrowLeft className="h-3.5 w-3.5 text-mute" />
-              Borrower App
-            </Link>
 
             {/* Mobile Connect / Disconnect */}
             <button
