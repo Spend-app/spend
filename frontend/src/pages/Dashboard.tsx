@@ -1,4 +1,5 @@
 import { HandCoins, Wallet } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { MUSD_PRICE } from "../data/mock";
 import { accruedInterest, icr, useNow } from "../lib/calc";
@@ -8,7 +9,8 @@ import SafetyBar from "../components/SafetyBar";
 import { Badge, Button, Card, Stat } from "../components/ui";
 import type { Tab } from "../types";
 
-export default function Dashboard({ go }: { go: (t: Tab) => void }) {
+export default function Dashboard({ go }: { go?: (t: Tab) => void }) {
+  const navigate = useNavigate();
   const {
     connected,
     connect,
@@ -20,6 +22,9 @@ export default function Dashboard({ go }: { go: (t: Tab) => void }) {
     price,
   } = useApp();
   const now = useNow(1000);
+
+  const toPosition = () => (go ? go("position") : navigate("/position"));
+  const toBorrow = () => (go ? go("borrow") : navigate("/borrow"));
 
   const total = btcBalance * price + musdBalance * MUSD_PRICE;
 
@@ -104,7 +109,7 @@ export default function Dashboard({ go }: { go: (t: Tab) => void }) {
               <Button
                 variant="secondary"
                 className="mt-4 w-full"
-                onClick={() => go("position")}
+                onClick={toPosition}
               >
                 See my loan
               </Button>
@@ -123,7 +128,7 @@ export default function Dashboard({ go }: { go: (t: Tab) => void }) {
                   Repay whenever you like.
                 </p>
               </div>
-              <Button onClick={() => go("borrow")}>Borrow now</Button>
+              <Button onClick={toBorrow}>Borrow now</Button>
             </div>
           )}
         </Card>

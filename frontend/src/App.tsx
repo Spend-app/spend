@@ -1,55 +1,11 @@
-import { useEffect, useState } from "react";
+import { RouterProvider } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
-import AppShell from "./components/AppShell";
-import Dashboard from "./pages/Dashboard";
-import Borrow from "./pages/Borrow";
-import Position from "./pages/Position";
-import Admin from "./pages/Admin";
-import type { Tab } from "./types";
-
-/** Admin lives on its own address: open the site with /admin at the end. */
-function useIsAdmin() {
-  const checkAdmin = () => {
-    const hash = window.location.hash.replace(/^#/, "");
-    return hash.startsWith("/admin") || window.location.pathname.startsWith("/admin");
-  };
-
-  const [isAdmin, setIsAdmin] = useState(checkAdmin);
-
-  useEffect(() => {
-    const onChange = () => setIsAdmin(checkAdmin());
-    window.addEventListener("hashchange", onChange);
-    window.addEventListener("popstate", onChange);
-    return () => {
-      window.removeEventListener("hashchange", onChange);
-      window.removeEventListener("popstate", onChange);
-    };
-  }, []);
-
-  return isAdmin;
-}
+import router from "./router";
 
 export default function App() {
-  const isAdmin = useIsAdmin();
-  const [tab, setTabState] = useState<Tab>("dashboard");
-
-  const go = (t: Tab) => {
-    setTabState(t);
-    window.scrollTo({ top: 0 });
-  };
-
   return (
     <>
-      {isAdmin ? (
-        <Admin />
-      ) : (
-        <AppShell tab={tab} onTab={go}>
-          {tab === "dashboard" && <Dashboard go={go} />}
-          {tab === "borrow" && <Borrow go={go} />}
-          {tab === "position" && <Position go={go} />}
-        </AppShell>
-      )}
-
+      <RouterProvider router={router} />
       <Toaster
         position="top-right"
         toastOptions={{

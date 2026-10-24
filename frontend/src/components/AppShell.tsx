@@ -7,15 +7,16 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { short } from "../lib/format";
 import type { Tab } from "../types";
 import WalletCard from "./WalletCard";
 
-const NAV: { id: Tab; label: string; icon: LucideIcon }[] = [
-  { id: "dashboard", label: "Home", icon: LayoutDashboard },
-  { id: "borrow", label: "Borrow", icon: HandCoins },
-  { id: "position", label: "My loan", icon: Wallet },
+const NAV: { path: string; id: Tab; label: string; icon: LucideIcon }[] = [
+  { path: "/", id: "dashboard", label: "Home", icon: LayoutDashboard },
+  { path: "/borrow", id: "borrow", label: "Borrow", icon: HandCoins },
+  { path: "/position", id: "position", label: "My loan", icon: Wallet },
 ];
 
 export default function AppShell({
@@ -23,48 +24,63 @@ export default function AppShell({
   onTab,
   children,
 }: {
-  tab: Tab;
-  onTab: (t: Tab) => void;
-  children: ReactNode;
+  tab?: Tab;
+  onTab?: (t: Tab) => void;
+  children?: ReactNode;
 }) {
   const { connected, address, connect, isOwner } = useApp();
-  const current = NAV.find((n) => n.id === tab);
+  const location = useLocation();
+
+  const current =
+    NAV.find((n) =>
+      tab
+        ? n.id === tab
+        : n.path === "/"
+          ? location.pathname === "/"
+          : location.pathname.startsWith(n.path),
+    ) || NAV[0];
 
   return (
     <div className="min-h-screen md:flex">
       {/* Sidebar (desktop) */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-white p-4 md:flex">
-        <Logo onClick={() => onTab("dashboard")} />
+        <Link to="/" onClick={() => onTab?.("dashboard")}>
+          <Logo />
+        </Link>
 
         <nav className="mt-8 space-y-1" aria-label="Main">
           {NAV.map((item) => {
-            const active = item.id === tab;
             const Icon = item.icon;
+            const isExact = item.path === "/";
             return (
-              <button
-                key={item.id}
-                onClick={() => onTab(item.id)}
-                aria-current={active ? "page" : undefined}
-                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors cursor-pointer ${
-                  active
-                    ? "bg-primary-soft text-primary-dark"
-                    : "text-mute hover:bg-soft hover:text-ink"
-                }`}
+              <NavLink
+                key={item.path}
+                to={item.path}
+                end={isExact}
+                onClick={() => onTab?.(item.id)}
+                className={({ isActive }) => {
+                  const active = tab ? tab === item.id : isActive;
+                  return `flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors cursor-pointer ${
+                    active
+                      ? "bg-primary-soft text-primary-dark"
+                      : "text-mute hover:bg-soft hover:text-ink"
+                  }`;
+                }}
               >
                 <Icon className="h-5 w-5" />
                 {item.label}
-              </button>
+              </NavLink>
             );
           })}
 
           {isOwner && (
-            <a
-              href="#/admin"
+            <Link
+              to="/admin"
               className="mt-4 flex w-full items-center gap-3 rounded-xl bg-purple-50 px-3 py-2.5 text-sm font-semibold text-purple-700 hover:bg-purple-100 transition-colors"
             >
               <Shield className="h-5 w-5" />
               Admin Panel
-            </a>
+            </Link>
           )}
         </nav>
 
@@ -77,7 +93,9 @@ export default function AppShell({
         {/* Top bar */}
         <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-line bg-white/90 px-4 py-3 backdrop-blur md:px-10">
           <div className="md:hidden">
-            <Logo onClick={() => onTab("dashboard")} compact />
+            <Link to="/" onClick={() => onTab?.("dashboard")}>
+              <Logo compact />
+            </Link>
           </div>
           <h1 className="hidden font-display text-lg font-semibold text-ink md:block">
             {current?.label}
@@ -85,17 +103,15 @@ export default function AppShell({
 
           <div className="flex items-center gap-2">
             {isOwner && (
-              <a
-                href="#/admin"
+              <Link
+                to="/admin"
                 className="flex items-center gap-1.5 rounded-xl border border-purple-200 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-100"
               >
                 <Shield className="h-3.5 w-3.5" />
                 Admin
-              </a>
+              </Link>
             )}
-            <span className="hidden whitespace-nowrap rounded-full bg-soft px-3 py-1.5 text-sm font-semibold text-mute sm:inline">
-              Test mode
-            </span>
+
             {/* On mobile the sidebar wallet is hidden, so connect lives here */}
             <button
               onClick={connect}
@@ -108,7 +124,7 @@ export default function AppShell({
         </header>
 
         <main className="mx-auto w-full max-w-5xl px-4 py-6 pb-28 md:px-10 md:py-8 md:pb-12">
-          {children}
+          {children || <Outlet />}
         </main>
       </div>
 
@@ -118,20 +134,24 @@ export default function AppShell({
         aria-label="Main"
       >
         {NAV.map((item) => {
-          const active = item.id === tab;
           const Icon = item.icon;
+          const isExact = item.path === "/";
           return (
-            <button
-              key={item.id}
-              onClick={() => onTab(item.id)}
-              aria-current={active ? "page" : undefined}
-              className={`flex flex-col items-center gap-1 py-2.5 text-xs font-semibold ${
-                active ? "text-primary-dark" : "text-mute"
-              }`}
+            <NavLink
+              key={item.path}
+              to={item.path}
+              end={isExact}
+              onClick={() => onTab?.(item.id)}
+              className={({ isActive }) => {
+                const active = tab ? tab === item.id : isActive;
+                return `flex flex-col items-center gap-1 py-2.5 text-xs font-semibold ${
+                  active ? "text-primary-dark" : "text-mute"
+                }`;
+              }}
             >
               <Icon className="h-5 w-5" />
               {item.label}
-            </button>
+            </NavLink>
           );
         })}
       </nav>
@@ -147,26 +167,28 @@ export function Logo({
   compact?: boolean;
 }) {
   const inner = (
-    <>
+    <div className="flex items-center gap-2.5">
       <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white">
         <Zap className="h-[18px] w-[18px]" />
       </span>
       <span
-        className={`font-display font-bold tracking-tight text-ink ${compact ? "text-lg" : "text-xl"}`}
+        className={`font-display font-bold tracking-tight text-ink ${
+          compact ? "text-lg" : "text-xl"
+        }`}
       >
         Spend
       </span>
-    </>
+    </div>
   );
   return onClick ? (
     <button
       onClick={onClick}
-      className="flex items-center gap-2.5"
+      className="flex items-center gap-2.5 cursor-pointer"
       aria-label="Spend home"
     >
       {inner}
     </button>
   ) : (
-    <span className="flex items-center gap-2.5">{inner}</span>
+    inner
   );
 }

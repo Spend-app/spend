@@ -1,6 +1,7 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
 import { AlertCircle, ArrowRight, Info, PauseCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { quoteFor } from "../lib/quote";
 import { btc, musd, num, pct, usd } from "../lib/format";
@@ -11,7 +12,8 @@ import type { Tab } from "../types";
 
 const QUICK = [10, 50, 100, 250, 500];
 
-export default function Borrow({ go }: { go: (t: Tab) => void }) {
+export default function Borrow({ go }: { go?: (t: Tab) => void }) {
+  const navigate = useNavigate();
   const {
     connected,
     connect,
@@ -42,6 +44,8 @@ export default function Borrow({ go }: { go: (t: Tab) => void }) {
   const blocked = paused || !!position;
   const canSubmit = n >= config.minBorrow && !error && !blocked;
 
+  const toPosition = () => (go ? go("position") : navigate("/position"));
+
   const submit = async () => {
     if (!connected) return connect();
     if (isWrongNetwork) {
@@ -58,7 +62,7 @@ export default function Borrow({ go }: { go: (t: Tab) => void }) {
             ? err.message
             : "That didn't go through. Please try again.",
       });
-      go("position");
+      toPosition();
     } catch {
       // toast handles the error display
     } finally {
@@ -90,8 +94,8 @@ export default function Borrow({ go }: { go: (t: Tab) => void }) {
           <Notice tone="violet" icon={<Info className="h-4 w-4" />}>
             You already have a loan. Repay it to borrow again.{" "}
             <button
-              onClick={() => go("position")}
-              className="font-semibold underline underline-offset-2"
+              onClick={toPosition}
+              className="font-semibold underline underline-offset-2 cursor-pointer"
             >
               See my loan
             </button>

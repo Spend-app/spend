@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
 import { AlertCircle, Check, HandCoins, ShieldCheck } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { MUSD_PRICE } from "../data/mock";
 import { accruedInterest, icr, useNow } from "../lib/calc";
@@ -17,7 +18,8 @@ import {
 } from "../components/ui";
 import type { Tab } from "../types";
 
-export default function Position({ go }: { go: (t: Tab) => void }) {
+export default function Position({ go }: { go?: (t: Tab) => void }) {
+  const navigate = useNavigate();
   const {
     connected,
     connect,
@@ -64,7 +66,11 @@ export default function Position({ go }: { go: (t: Tab) => void }) {
         icon={<HandCoins className="h-6 w-6" />}
         title="You have no loan"
         text={`Borrow from ${usd(config.minBorrow, 0)} against a little Bitcoin. You can repay whenever you like.`}
-        action={<Button onClick={() => go("borrow")}>Borrow now</Button>}
+        action={
+          <Button onClick={() => (go ? go("borrow") : navigate("/borrow"))}>
+            Borrow now
+          </Button>
+        }
       />
     );
   }
