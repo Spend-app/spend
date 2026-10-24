@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import {
   HandCoins,
   LayoutDashboard,
-  Shield,
   Wallet,
   Zap,
   type LucideIcon,
@@ -28,7 +27,7 @@ export default function AppShell({
   onTab?: (t: Tab) => void;
   children?: ReactNode;
 }) {
-  const { connected, address, connect, isOwner } = useApp();
+  const { connected, address, connect } = useApp();
   const location = useLocation();
 
   const current =

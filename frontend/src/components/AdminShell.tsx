@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import {
   Activity,
   AlertCircle,
-  ArrowLeft,
   Coins,
   LayoutDashboard,
   Lock,
