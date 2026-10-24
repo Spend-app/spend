@@ -18,7 +18,6 @@ export default function Dashboard({ go }: { go?: (t: Tab) => void }) {
     musdBalance,
     position,
     config,
-    masterState,
     price,
   } = useApp();
   const now = useNow(1000);
@@ -77,9 +76,9 @@ export default function Dashboard({ go }: { go?: (t: Tab) => void }) {
                 Borrow dollars against your Bitcoin
               </h2>
               <p className="mt-2 max-w-md text-sm text-mute">
-                Lock a little Bitcoin, get MUSD (a digital dollar) straight away,
-                and get the same Bitcoin back when you repay. Loans start at{" "}
-                {usd(config.minBorrow, 0)}.
+                Lock a little Bitcoin, get MUSD (a digital dollar) straight
+                away, and get the same Bitcoin back when you repay. Loans start
+                at {usd(config.minBorrow, 0)}.
               </p>
               <Button className="mt-5" onClick={connect}>
                 <Wallet className="h-4 w-4" />
@@ -134,12 +133,12 @@ export default function Dashboard({ go }: { go?: (t: Tab) => void }) {
         </Card>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat
+      <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(250px,1fr))]">
+        {/* <Stat
           label="Cash ready to lend"
           value={musd(masterState.cashBuffer, 0)}
           sub="Available for new loans"
-        />
+        /> */}
         <Stat
           label="Interest"
           value={`${pct(config.userInterestRate)} a year`}
