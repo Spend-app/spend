@@ -25,8 +25,17 @@ import {
   ZERO_ADDRESS,
 } from "../config/contracts";
 import { erc20Abi, spendAbi } from "../abi";
-import { CONFIG as DEFAULT_CONFIG, MASTER as DEFAULT_MASTER, PRICE as DEFAULT_PRICE } from "../data/mock";
 import { getHints } from "../lib/hints";
+
+// Off-chain policy constants. There are no on-chain getters for these, so they
+// live in the client config rather than as mock/demo fallback data.
+const PRICE_DRIFT_BUFFER = 1.01; // quote +1% margin for block-to-block price drift
+const LIQUIDATION_RANGE = "130–140%"; // internal liquidation zone (from the proposal)
+const LIQUIDATION_START = 140; // top of that zone, used as the conservative warning line
+
+/** Format a bigint on-chain value, or 0 when the read has not resolved yet. */
+const toNum = (v: bigint | undefined, decimals = 18) =>
+  v !== undefined ? Number(formatUnits(v, decimals)) : 0;
 
 export interface Position {
   btc: number; // exact BTC quantity deposited
@@ -178,24 +187,96 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const { data: protocolData, refetch: refetchProtocol } = useReadContracts({
     contracts: [
       { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "owner" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "paused" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "masterOpened" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "getPrice" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "minBorrow" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "maxBorrow" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "minUserICR" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "pauseICR" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "originationFeeBps" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "userInterestRate" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "bufferThreshold" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "getCashBuffer" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "getMasterICR" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "getMasterTCR" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "isRecoveryMode" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "totalUserPrincipal" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "grossFees" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "getMasterTroveState" },
-      { address: SPEND_CONTRACT_ADDRESS, abi: spendAbi, functionName: "getMasterInterestRateBps" },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "paused",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "masterOpened",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "getPrice",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "minBorrow",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "maxBorrow",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "minUserICR",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "pauseICR",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "originationFeeBps",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "userInterestRate",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "bufferThreshold",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "getCashBuffer",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "getMasterICR",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "getMasterTCR",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "isRecoveryMode",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "totalUserPrincipal",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "grossFees",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "getMasterTroveState",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "getMasterInterestRateBps",
+      },
     ],
     query: {
       refetchInterval: 12_000,
@@ -203,35 +284,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
   });
 
   // 5. User Position Reads
-  const { data: userPositionData, refetch: refetchPosition } = useReadContracts({
-    contracts: [
-      {
-        address: SPEND_CONTRACT_ADDRESS,
-        abi: spendAbi,
-        functionName: "getUserPosition",
-        args: address ? [address] : undefined,
+  const { data: userPositionData, refetch: refetchPosition } = useReadContracts(
+    {
+      contracts: [
+        {
+          address: SPEND_CONTRACT_ADDRESS,
+          abi: spendAbi,
+          functionName: "getUserPosition",
+          args: address ? [address] : undefined,
+        },
+        {
+          address: SPEND_CONTRACT_ADDRESS,
+          abi: spendAbi,
+          functionName: "positions",
+          args: address ? [address] : undefined,
+        },
+      ],
+      query: {
+        enabled: !!address,
+        refetchInterval: 6_000,
       },
-      {
-        address: SPEND_CONTRACT_ADDRESS,
-        abi: spendAbi,
-        functionName: "positions",
-        args: address ? [address] : undefined,
-      },
-    ],
-    query: {
-      enabled: !!address,
-      refetchInterval: 6_000,
     },
-  });
+  );
 
   // Parse Protocol Values
   const owner = (protocolData?.[0]?.result as string) || "";
   const paused = Boolean(protocolData?.[1]?.result ?? false);
-  const masterOpened = Boolean(protocolData?.[2]?.result ?? DEFAULT_MASTER.opened);
+  const masterOpened = Boolean(protocolData?.[2]?.result ?? false);
 
   const price = useMemo(() => {
     const rawPrice = protocolData?.[3]?.result as bigint | undefined;
-    if (!rawPrice || rawPrice === 0n) return DEFAULT_PRICE;
+    if (rawPrice === undefined) return 0;
     return Number(formatUnits(rawPrice, 18));
   }, [protocolData]);
 
@@ -240,21 +323,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const maxBorrowRaw = protocolData?.[5]?.result as bigint | undefined;
     const minUserICRRaw = protocolData?.[6]?.result as bigint | undefined;
     const pauseICRRaw = protocolData?.[7]?.result as bigint | undefined;
-    const originationFeeBpsRaw = protocolData?.[8]?.result as bigint | undefined;
+    const originationFeeBpsRaw = protocolData?.[8]?.result as
+      | bigint
+      | undefined;
     const userInterestRateRaw = protocolData?.[9]?.result as bigint | undefined;
     const bufferThresholdRaw = protocolData?.[10]?.result as bigint | undefined;
 
     return {
-      minBorrow: minBorrowRaw ? Number(formatUnits(minBorrowRaw, 18)) : DEFAULT_CONFIG.minBorrow,
-      maxBorrow: maxBorrowRaw ? Number(formatUnits(maxBorrowRaw, 18)) : DEFAULT_CONFIG.maxBorrow,
-      minUserICR: minUserICRRaw ? Number(formatUnits(minUserICRRaw, 16)) : DEFAULT_CONFIG.minUserICR,
-      pauseICR: pauseICRRaw ? Number(formatUnits(pauseICRRaw, 16)) : DEFAULT_CONFIG.pauseICR,
-      originationFeeBps: originationFeeBpsRaw ? Number(originationFeeBpsRaw) : DEFAULT_CONFIG.originationFeeBps,
-      userInterestRate: userInterestRateRaw ? Number(formatUnits(userInterestRateRaw, 16)) : DEFAULT_CONFIG.userInterestRate,
-      bufferThreshold: bufferThresholdRaw ? Number(formatUnits(bufferThresholdRaw, 18)) : DEFAULT_CONFIG.bufferThreshold,
-      priceDriftBuffer: DEFAULT_CONFIG.priceDriftBuffer,
-      liquidationRange: DEFAULT_CONFIG.liquidationRange,
-      liquidationStart: DEFAULT_CONFIG.liquidationStart,
+      minBorrow: toNum(minBorrowRaw, 18),
+      maxBorrow: toNum(maxBorrowRaw, 18),
+      minUserICR: toNum(minUserICRRaw, 16),
+      pauseICR: toNum(pauseICRRaw, 16),
+      originationFeeBps:
+        originationFeeBpsRaw !== undefined ? Number(originationFeeBpsRaw) : 0,
+      userInterestRate: toNum(userInterestRateRaw, 16),
+      bufferThreshold: toNum(bufferThresholdRaw, 18),
+      priceDriftBuffer: PRICE_DRIFT_BUFFER,
+      liquidationRange: LIQUIDATION_RANGE,
+      liquidationStart: LIQUIDATION_START,
     };
   }, [protocolData]);
 
@@ -263,27 +349,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const masterICRRaw = protocolData?.[12]?.result as bigint | undefined;
     const masterTCRRaw = protocolData?.[13]?.result as bigint | undefined;
     const recoveryModeRaw = protocolData?.[14]?.result as boolean | undefined;
-    const totalUserPrincipalRaw = protocolData?.[15]?.result as bigint | undefined;
+    const totalUserPrincipalRaw = protocolData?.[15]?.result as
+      | bigint
+      | undefined;
     const grossFeesRaw = protocolData?.[16]?.result as bigint | undefined;
-    const troveStateRaw = protocolData?.[17]?.result as [bigint, bigint, bigint, bigint, bigint, bigint] | undefined;
+    const troveStateRaw = protocolData?.[17]?.result as
+      | [bigint, bigint, bigint, bigint, bigint, bigint]
+      | undefined;
     const mezoRateBpsRaw = protocolData?.[18]?.result as number | undefined;
 
-    const collateral = troveStateRaw ? Number(formatUnits(troveStateRaw[0], 18)) : DEFAULT_MASTER.collateral;
-    const principal = troveStateRaw ? Number(formatUnits(troveStateRaw[1], 18)) : 0;
-    const interest = troveStateRaw ? Number(formatUnits(troveStateRaw[2], 18)) : 0;
-    const compositeDebt = troveStateRaw ? principal + interest : DEFAULT_MASTER.debt;
+    const collateral = toNum(troveStateRaw?.[0], 18);
+    const principal = toNum(troveStateRaw?.[1], 18);
+    const interest = toNum(troveStateRaw?.[2], 18);
+    const compositeDebt = principal + interest;
+
+    console.log("State:", {
+      opened: masterOpened,
+      collateral,
+      debt: compositeDebt,
+      cashBuffer: toNum(cashBufferRaw, 18),
+      icr: toNum(masterICRRaw, 16),
+      tcr: toNum(masterTCRRaw, 16),
+      mezoRateBps: mezoRateBpsRaw ?? 0,
+      recoveryMode: Boolean(recoveryModeRaw),
+      totalUserPrincipal: toNum(totalUserPrincipalRaw, 18),
+      grossFees: toNum(grossFeesRaw, 18),
+      owner,
+    });
 
     return {
       opened: masterOpened,
       collateral,
       debt: compositeDebt,
-      cashBuffer: cashBufferRaw ? Number(formatUnits(cashBufferRaw, 18)) : DEFAULT_MASTER.cashBuffer,
-      icr: masterICRRaw ? Number(formatUnits(masterICRRaw, 16)) : 0,
-      tcr: masterTCRRaw ? Number(formatUnits(masterTCRRaw, 16)) : DEFAULT_MASTER.tcr,
-      mezoRateBps: mezoRateBpsRaw ?? DEFAULT_MASTER.mezoRateBps,
+      cashBuffer: toNum(cashBufferRaw, 18),
+      icr: toNum(masterICRRaw, 16),
+      tcr: toNum(masterTCRRaw, 16),
+      mezoRateBps: mezoRateBpsRaw ?? 0,
       recoveryMode: Boolean(recoveryModeRaw),
-      totalUserPrincipal: totalUserPrincipalRaw ? Number(formatUnits(totalUserPrincipalRaw, 18)) : DEFAULT_MASTER.totalUserPrincipal,
-      grossFees: grossFeesRaw ? Number(formatUnits(grossFeesRaw, 18)) : DEFAULT_MASTER.grossFees,
+      totalUserPrincipal: toNum(totalUserPrincipalRaw, 18),
+      grossFees: toNum(grossFeesRaw, 18),
       owner,
     };
   }, [protocolData, masterOpened, owner]);
@@ -292,8 +396,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const position: Position | null = useMemo(() => {
     if (!address) return null;
 
-    const userPos = userPositionData?.[0]?.result as [bigint, bigint, bigint, bigint, boolean] | undefined;
-    const rawPos = userPositionData?.[1]?.result as [bigint, bigint, bigint, boolean] | undefined;
+    const userPos = userPositionData?.[0]?.result as
+      | [bigint, bigint, bigint, bigint, boolean]
+      | undefined;
+    const rawPos = userPositionData?.[1]?.result as
+      | [bigint, bigint, bigint, boolean]
+      | undefined;
 
     const isActive = userPos?.[4] || rawPos?.[3];
     if (!isActive) return null;
@@ -335,7 +443,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refetchPosition(),
       refetchProtocol(),
     ]);
-  }, [refetchBtc, refetchMusd, refetchAllowance, refetchPosition, refetchProtocol]);
+  }, [
+    refetchBtc,
+    refetchMusd,
+    refetchAllowance,
+    refetchPosition,
+    refetchProtocol,
+  ]);
 
   // Actions
   const approve = useCallback(async () => {
@@ -355,7 +469,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const borrow = useCallback(
     async (amount: number, btcToSend: number) => {
       if (!address) throw new Error("Please connect your wallet first.");
-      if (amount <= 0 || btcToSend <= 0) throw new Error("Invalid borrow amount.");
+      if (amount <= 0 || btcToSend <= 0)
+        throw new Error("Invalid borrow amount.");
 
       const musdWei = parseUnits(amount.toString(), 18);
       const btcWei = parseEther(btcToSend.toFixed(18));
@@ -381,7 +496,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       await refetchAll();
     },
-    [address, config.originationFeeBps, publicClient, writeContractAsync, refetchAll],
+    [
+      address,
+      config.originationFeeBps,
+      publicClient,
+      writeContractAsync,
+      refetchAll,
+    ],
   );
 
   const repay = useCallback(
@@ -408,7 +529,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       await refetchAll();
     },
-    [address, allowanceData, approve, writeContractAsync, publicClient, refetchAll],
+    [
+      address,
+      allowanceData,
+      approve,
+      writeContractAsync,
+      publicClient,
+      refetchAll,
+    ],
   );
 
   const setPaused = useCallback(

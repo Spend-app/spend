@@ -185,7 +185,7 @@ export function SetupCard({
     }
   };
 
-  const needed = (Number(cash) * 2.5) / (price || 98420);
+  const needed = price > 0 ? (Number(cash) * 2.5) / price : 0;
 
   return (
     <Card>
@@ -207,9 +207,14 @@ export function SetupCard({
               placeholder="0.0000"
             />
           </div>
-          {Number(cash) > 0 && (
+          {Number(cash) > 0 && price > 0 && (
             <p className="mt-1.5 text-xs text-mute">
               About {num(needed, 4)} BTC keeps the reserve at a safe 250% ICR.
+            </p>
+          )}
+          {Number(cash) > 0 && price <= 0 && (
+            <p className="mt-1.5 text-xs text-amber-600">
+              BTC price not loaded yet — enter the deposit amount manually.
             </p>
           )}
         </div>
