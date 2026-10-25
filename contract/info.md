@@ -1,7 +1,21 @@
-✅ **Done — the updated contract is created and compile-verified.**
+### Live deployment status (verified 2026-10-25 via RPC `https://rpc.test.mezo.org`, chainId 31611)
 
-**File:** `/home/freed/Projects/alamin-website/Spend.sol` (552 lines)
-**Compile check:** clean build with **solc 0.8.24** (`forge build`) — zero errors, zero warnings. Generated ABI (53 entries) + deployed bytecode (~26 KB) confirmed.
+Spend contract `0xD4f45a4A2B0EF9B64b2dA17c8287F5B429b00513` **answered every view call**:
+
+| Call                         | Live value                                 |
+| ---------------------------- | ------------------------------------------ |
+| `masterOpened()`             | `true` — Master Trove is open              |
+| `paused()`                   | `false` — borrowing is open                |
+| `getPrice()`                 | 80,383.63 USD/BTC (oracle)                 |
+| `getCashBuffer()`            | 1,740.30 MUSD funded                       |
+| `getMasterICR()`             | 285.6% (in 250–300% target zone)           |
+| `getMasterInterestRateBps()` | 100 bps (1.00% fixed)                      |
+| `minBorrow` / `maxBorrow`    | 10 / 500 MUSD                              |
+| `userInterestRate`           | 4.00% (simple, 1e16)                       |
+| `originationFeeBps`          | 30 (0.30%)                                 |
+| `bufferThreshold`            | 500 MUSD                                   |
+| `totalUserPrincipal`         | 60 MUSD in active user loans               |
+| `owner()`                    | 0xb43c9f0f2bb65a37761e7867a6f1903799f45d65 |
 
 ---
 
@@ -80,50 +94,3 @@ Deploy → **owner opens the master trove** (send ~0.025 BTC + request 2,000 MUS
 4. **Teardown** → all users repaid → owner burns master debt, closes trove, extracts BTC/MUSD.
 
 Verified on-chain facts that make it work: buffer refill mints exactly the requested MUSD; `repayMUSD` burns (no approvals needed); `borrow`/`repay` are atomic (any Mezo revert returns the user's BTC).
-
----
-
-# 3. What the frontend needs
-
-### Network config (MetaMask)
-
-- **Matsnet**: chainId **31611**, RPC `https://rpc.test.mezo.org`, symbol **BTC**, explorer `https://explorer.test.mezo.org`. Users need a little test BTC for gas + MUSD (they can open one standard 2,000 MUSD trove in the Mezo app to self-fund repayments).
-
-### Read calls (data layer)
-
-| Data                                           | Call                                                                                                                                                                             |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| BTC quote for $X                               | `Spend.getRequiredBTC(x)` → multiply by ~1.01 (price drift)                                                                                                                      |
-| Current price                                  | `Spend.getPrice()`                                                                                                                                                               |
-| Cash buffer / master ICR / TCR / recovery mode | `getCashBuffer()`, `getMasterICR()`, `getMasterTCR()`, `isRecoveryMode()`                                                                                                        |
-| Master state (dashboard)                       | `getMasterTroveState()` → (coll, principal, interest, pendings), `getMasterInterestRateBps()`, `getMasterBorrowingFee(debt)`, `getMasterMinNetDebt()`                            |
-| My position                                    | `getUserPosition(me)` → (btc, principal, interest, totalOwed), `getUserICR(me)`, `getTotalOwed(me)`, `positions(me)`                                                             |
-| Config                                         | `paused()`, `minBorrow`, `maxBorrow`, `minUserICR`, `pauseICR`, `originationFeeBps`, `userInterestRate`, `bufferThreshold`, `grossFees`, `totalUserPrincipal` (all auto-getters) |
-| MUSD side                                      | `MUSD.balanceOf(me)`, `MUSD.allowance(me, spend)` — `0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503`                                                                                 |
-
-### Write calls (user)
-
-1. **Borrow**: `Spend.borrow(musdAmount, upperHint, lowerHint)` — `{ value: requiredBTC }` where `requiredBTC = (quote + 1%)`.
-2. **Approve (critical, once)**: `MUSD.approve(spend, type(uint256).max)` — must be shown _before_ repay; infinite allowance avoids stale-approval reverts from per-second interest accrual.
-3. **Repay**: `Spend.repay(upperHint, lowerHint)` — needs MUSD balance ≥ totalOwed.
-
-### Hint computation (required before every borrow/repay call)
-
-```
-fee  = musd * originationFeeBps / 10000
-nicr = btcUnits * 1e20 / (musd + fee + 200e18)      // btcUnits = value you'll send
-hint = HintHelpers.getApproxHint(nicr, 15, 42)[0]   // 0x4e4cBA3779d56386ED43631b4dCD6d8EacEcBCF6
-(upper, lower) = SortedTroves.findInsertPosition(nicr, hint, hint)   // 0x722E4D24FD6Ff8b0AC679450F3D91294607268fA
-```
-
-### Screens
-
-1. **Borrow**: amount input → live BTC quote + fee → "Send BTC" (value in tx) → success = MUSD received.
-2. **Position**: principal, interest ticking per second, total owed, user ICR, BTC claimable.
-3. **Repay**: allowance check → approve step if needed → repay → BTC returned.
-4. **Owner dashboard** (admin tab): open trove wizard (needs BTC + debt request), master ICR/buffer/state, gross fees + `withdrawFees`, pause, refinance, claim collateral, close.
-5. **Monitor**: alarm when `getMasterICR() < pauseICR`, `isRecoveryMode()`, or `buffer < bufferThreshold`.
-
-One optional note: forge's linter emits style-only `mixed-case-function` notes for `getMasterICR`/`getUserICR`/etc. (names inherited from your original contract) — harmless; rename if you want lint-clean, but nothing is affected functionally.
-
-Everything in this file and this answer was verified against the official Mezo artifacts, protocol source, and live testnet RPC — nothing is assumed.

@@ -5,35 +5,32 @@ import { Logo } from "../components/AppShell";
 import { Button } from "../components/ui";
 import { useApp } from "../context/AppContext";
 
-/** Each hero slide carries its own background photo and its own copy. */
+/** Each hero slide carries its own headline, copy and a generated product
+ *  screenshot (see scripts/shot-templates + scripts/take-shots.sh) shown in a
+ *  centered showcase. The dark branded backdrop stays as the base. */
 const SLIDES = [
   {
-    image:
-      "https://images.unsplash.com/photo-1591696205602-2f950c417cb9?auto=format&fit=crop&w=1800&q=80",
+    image: "/images/hero-dashboard.png",
     title: "Get cash from your Bitcoin, keep your coins.",
-    text: "Borrow against your BTC in minutes while staying long Bitcoin. When you repay, the same coins you locked come back to you.",
+    text: "Borrow against your BTC in minutes without selling it. When you repay, the same coins you locked come back to you.",
   },
   {
-    image:
-      "https://images.unsplash.com/photo-1621761191319-c6fb62004040?auto=format&fit=crop&w=1800&q=80",
+    image: "/images/hero-borrow.png",
     title: "Use your money, keep your upside.",
-    text: "Turn idle Bitcoin into everyday cash without selling. If the market moves, your coins are still yours.",
+    text: "Turn idle Bitcoin into everyday cash. Your coins stay yours — you're never selling them.",
   },
   {
-    image:
-      "https://images.unsplash.com/photo-1639322537228-f710d846310a?auto=format&fit=crop&w=1800&q=80",
+    image: "/images/hero-position.png",
     title: "Buy what matters today.",
-    text: "A new laptop, a flight home, a repair. Borrow exactly what you need, from $10, and pay it back on your schedule.",
+    text: "Stock for your shop, a repair that can't wait, a flight home. Borrow exactly what you need, from $10, and pay it back on your schedule.",
   },
   {
-    image:
-      "https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=1800&q=80",
+    image: "/images/hero-repay.png",
     title: "Liquidity for your business, not your balance sheet.",
     text: "Flexible small loans against your Bitcoin without selling it. No paperwork or intermediaries, repay any time.",
   },
   {
-    image:
-      "https://images.unsplash.com/photo-1605792657660-596af9009e82?auto=format&fit=crop&w=1800&q=80",
+    image: "/images/hero-borrow.png",
     title: "Simple pricing, no surprises.",
     text: "4% a year in simple interest, calculated per second, plus a one-time 0.30% fee. No compounding, no hidden costs.",
   },
@@ -64,11 +61,22 @@ const FAQS = [
   },
 ];
 
+/** Centered hero copy with a live app showcase rendered from generated
+ *  screenshots (scripts/take-shots.sh). The showcase scales down responsively
+ *  and the whole hero stays centered at every breakpoint. */
 export default function Landing() {
   const navigate = useNavigate();
   const { connected, connect, isOwner, masterState } = useApp();
   const count = SLIDES.length;
   const [index, setIndex] = useState(0);
+  const [scrolled, setScrolled] = useState(false);
+
+  // Switch the header style once the user scrolls past the hero.
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 60);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   // Auto-advance the carousel. Re-created on every index change, so a manual
   // switch restarts the timer.
@@ -100,10 +108,16 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header, floating on top of the hero */}
-      <header className="absolute inset-x-0 top-0 z-20">
+      {/* Header – transparent over the dark hero, frosted glass once scrolled */}
+      <header
+        className={`fixed inset-x-0 top-0 z-20 transition-all duration-300 ${
+          scrolled
+            ? "border-b border-line bg-white/90 backdrop-blur-md shadow-sm"
+            : ""
+        }`}
+      >
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-5">
-          <Logo light />
+          <Logo light={!scrolled} />
           <Button
             onClick={() => (connected ? openApp() : connect())}
             className="px-5 py-2.5"
@@ -114,34 +128,59 @@ export default function Landing() {
       </header>
 
       {/* Hero carousel */}
-      <section className="group relative flex min-h-screen items-center overflow-hidden">
-        {SLIDES.map((s, i) => (
+      <section className="group relative flex min-h-screen items-center overflow-hidden bg-[#100d1f]">
+        {/* Branded backdrop — layered gradients + a faint grid. Always on-brand,
+            and the base that any real hero photo sits on top of. */}
+        <div className="absolute inset-0">
+          <div className="absolute -left-40 -top-48 h-[36rem] w-[36rem] rounded-full bg-primary/25 blur-[130px]" />
+          <div className="absolute -bottom-40 right-0 h-[32rem] w-[32rem] rounded-full bg-[#f7931a]/10 blur-[130px]" />
           <div
-            key={s.image}
-            aria-hidden={i !== index}
-            className={`absolute inset-0 transition-opacity duration-700 ${
-              i === index ? "opacity-100" : "opacity-0"
-            }`}
-          >
-            <img src={s.image} alt="" className="h-full w-full object-cover" />
-            <div className="absolute inset-0 bg-linear-to-r from-black/70 via-black/45 to-black/25" />
-          </div>
-        ))}
+            className="absolute inset-0 opacity-[0.16]"
+            style={{
+              backgroundImage:
+                "linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px)",
+              backgroundSize: "64px 64px",
+            }}
+          />
+        </div>
 
-        {/* Active slide content */}
-        <div className="relative z-10 mx-auto w-full max-w-6xl px-16 pb-32 pt-28 sm:px-24 lg:px-5">
-          <div key={index} className="max-w-2xl">
-            <h1 className="font-display text-4xl font-semibold leading-[1.06] tracking-tight text-white sm:text-5xl lg:text-6xl">
+        {/* Centered copy + live app showcase */}
+        <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col items-center px-5 pb-20 pt-32 text-center sm:px-24 lg:px-5">
+          <div key={index} className="max-w-3xl">
+            <h1 className="font-display text-4xl font-semibold leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-6xl">
               {title}
             </h1>
-            <p className="mt-6 max-w-lg text-lg text-white/80">{text}</p>
-            <div className="mt-9">
+            <p className="mx-auto mt-6 max-w-xl text-lg text-white/75">
+              {text}
+            </p>
+            <div className="mt-9 flex justify-center">
               <Button
                 onClick={() => (connected ? openApp() : connect())}
-                className="px-6 py-3.5 text-base"
+                className="px-7 py-3.5 text-base"
               >
                 Get Started
               </Button>
+            </div>
+          </div>
+
+          {/* Live app showcase */}
+          <div className="relative mt-16 w-full max-w-4xl">
+            <div className="absolute -inset-8 rounded-[2.5rem] bg-primary/25 blur-3xl" />
+            <div className="relative overflow-hidden rounded-2xl border border-white/15 bg-[#17121f] shadow-2xl shadow-black/60">
+              <div className="flex items-center gap-2 border-b border-white/10 bg-white/5 px-5 py-3.5">
+                <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
+                <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
+                <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+                <div className="ml-4 flex-1 rounded-lg bg-white/10 px-3 py-1.5 text-center text-xs text-white/70">
+                  Spend · Mezo
+                </div>
+              </div>
+              <img
+                key={SLIDES[index].image}
+                src={SLIDES[index].image}
+                alt="Spend app"
+                className="h-auto w-full"
+              />
             </div>
           </div>
         </div>
@@ -175,11 +214,13 @@ export default function Landing() {
         <div className="absolute inset-x-0 bottom-8 z-20 flex items-center justify-center gap-2">
           {SLIDES.map((s, i) => (
             <button
-              key={s.image}
+              key={s.title}
               onClick={() => setIndex(i)}
               aria-label={`Go to slide ${i + 1}`}
               className={`h-1.5 rounded-full transition-all ${
-                i === index ? "w-8 bg-white" : "w-4 bg-white/40 hover:bg-white/60"
+                i === index
+                  ? "w-8 bg-white"
+                  : "w-4 bg-white/40 hover:bg-white/60"
               }`}
             />
           ))}
