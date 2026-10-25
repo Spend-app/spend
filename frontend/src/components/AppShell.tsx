@@ -3,7 +3,6 @@ import {
   HandCoins,
   LayoutDashboard,
   Wallet,
-  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
@@ -147,9 +146,11 @@ export function Logo({
 }) {
   const inner = (
     <div className="flex items-center gap-2.5">
-      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white">
-        <Zap className="h-[18px] w-[18px]" />
-      </span>
+      <img
+        src="/logo.png"
+        alt="Spend logo"
+        className="h-9 w-auto object-contain"
+      />
       <span
         className={`font-display font-bold tracking-tight text-ink ${
           compact ? "text-lg" : "text-xl"
