@@ -67,7 +67,7 @@ export default function Position({ go }: { go?: (t: Tab) => void }) {
         title="You have no loan"
         text={`Borrow from ${usd(config.minBorrow, 0)} against a little Bitcoin. You can repay whenever you like.`}
         action={
-          <Button onClick={() => (go ? go("borrow") : navigate("/borrow"))}>
+          <Button onClick={() => (go ? go("borrow") : navigate("/app/borrow"))}>
             Borrow now
           </Button>
         }

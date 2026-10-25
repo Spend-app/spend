@@ -44,7 +44,7 @@ export default function Borrow({ go }: { go?: (t: Tab) => void }) {
   const blocked = paused || !!position;
   const canSubmit = n >= config.minBorrow && !error && !blocked;
 
-  const toPosition = () => (go ? go("position") : navigate("/position"));
+  const toPosition = () => (go ? go("position") : navigate("/app/position"));
 
   const submit = async () => {
     if (!connected) return connect();
@@ -199,7 +199,7 @@ export default function Borrow({ go }: { go?: (t: Tab) => void }) {
           <div className="mt-2 divide-y divide-line">
             <Row
               label={`Fee (${pct(config.originationFeeBps / 100, 2)}, paid once)`}
-              value={n > 0 ? musd(q.fee) : "—"}
+              value={n > 0 ? musd(q.fee) : "–"}
             />
             <Row
               label="Interest"
@@ -223,13 +223,13 @@ export default function Borrow({ go }: { go?: (t: Tab) => void }) {
               <div className="flex justify-between">
                 <span>Safe if Bitcoin stays above</span>
                 <span className="font-medium text-ink">
-                  {n > 0 ? usd(q.liqPrice) : "—"}
+                  {n > 0 ? usd(q.liqPrice) : "–"}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span>Bitcoin can fall by</span>
                 <span className="font-medium text-ink">
-                  {n > 0 ? num(q.dropPct, 0) + "%" : "—"}
+                  {n > 0 ? num(q.dropPct, 0) + "%" : "–"}
                 </span>
               </div>
             </div>

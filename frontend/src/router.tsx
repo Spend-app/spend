@@ -1,6 +1,8 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
+import Landing from "./pages/Landing";
 import AppShell from "./components/AppShell";
 import AdminShell from "./components/AdminShell";
+import RequireWallet from "./components/RequireWallet";
 import Dashboard from "./pages/Dashboard";
 import Borrow from "./pages/Borrow";
 import Position from "./pages/Position";
@@ -12,6 +14,10 @@ import AdminOperations from "./pages/admin/Operations";
 export const router = createBrowserRouter([
   {
     path: "/",
+    element: <Landing />,
+  },
+  {
+    path: "/app",
     element: <AppShell />,
     children: [
       { index: true, element: <Dashboard /> },
@@ -21,7 +27,11 @@ export const router = createBrowserRouter([
   },
   {
     path: "/admin",
-    element: <AdminShell />,
+    element: (
+      <RequireWallet>
+        <AdminShell />
+      </RequireWallet>
+    ),
     children: [
       { index: true, element: <AdminOverview /> },
       { path: "liquidity", element: <AdminLiquidity /> },

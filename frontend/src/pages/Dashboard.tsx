@@ -22,8 +22,8 @@ export default function Dashboard({ go }: { go?: (t: Tab) => void }) {
   } = useApp();
   const now = useNow(1000);
 
-  const toPosition = () => (go ? go("position") : navigate("/position"));
-  const toBorrow = () => (go ? go("borrow") : navigate("/borrow"));
+  const toPosition = () => (go ? go("position") : navigate("/app/position"));
+  const toBorrow = () => (go ? go("borrow") : navigate("/app/borrow"));
 
   const total = btcBalance * price + musdBalance * musdPrice;
 

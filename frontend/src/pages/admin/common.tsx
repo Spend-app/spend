@@ -214,7 +214,7 @@ export function SetupCard({
           )}
           {Number(cash) > 0 && price <= 0 && (
             <p className="mt-1.5 text-xs text-amber-600">
-              BTC price not loaded yet — enter the deposit amount manually.
+              BTC price not loaded yet. Enter the deposit amount manually.
             </p>
           )}
         </div>

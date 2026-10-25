@@ -12,9 +12,9 @@ import type { Tab } from "../types";
 import WalletCard from "./WalletCard";
 
 const NAV: { path: string; id: Tab; label: string; icon: LucideIcon }[] = [
-  { path: "/", id: "dashboard", label: "Home", icon: LayoutDashboard },
-  { path: "/borrow", id: "borrow", label: "Borrow", icon: HandCoins },
-  { path: "/position", id: "position", label: "My loan", icon: Wallet },
+  { path: "/app", id: "dashboard", label: "Home", icon: LayoutDashboard },
+  { path: "/app/borrow", id: "borrow", label: "Borrow", icon: HandCoins },
+  { path: "/app/position", id: "position", label: "My loan", icon: Wallet },
 ];
 
 export default function AppShell({
@@ -33,8 +33,8 @@ export default function AppShell({
     NAV.find((n) =>
       tab
         ? n.id === tab
-        : n.path === "/"
-          ? location.pathname === "/"
+        : n.path === "/app"
+          ? location.pathname === "/app" || location.pathname === "/app/"
           : location.pathname.startsWith(n.path),
     ) || NAV[0];
 
@@ -42,7 +42,7 @@ export default function AppShell({
     <div className="min-h-screen md:flex">
       {/* Sidebar (desktop) */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-white p-4 md:flex">
-        <Link to="/" onClick={() => onTab?.("dashboard")}>
+        <Link to="/app" onClick={() => onTab?.("dashboard")}>
           <Logo />
         </Link>
 
@@ -81,7 +81,7 @@ export default function AppShell({
         {/* Top bar */}
         <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-line bg-white/90 px-4 py-3 backdrop-blur md:px-10">
           <div className="md:hidden">
-            <Link to="/" onClick={() => onTab?.("dashboard")}>
+            <Link to="/app" onClick={() => onTab?.("dashboard")}>
               <Logo compact />
             </Link>
           </div>
@@ -140,9 +140,11 @@ export default function AppShell({
 export function Logo({
   onClick,
   compact,
+  light,
 }: {
   onClick?: () => void;
   compact?: boolean;
+  light?: boolean;
 }) {
   const inner = (
     <div className="flex items-center gap-2.5">
@@ -152,9 +154,9 @@ export function Logo({
         className="h-9 w-auto object-contain"
       />
       <span
-        className={`font-display font-bold tracking-tight text-ink ${
-          compact ? "text-lg" : "text-xl"
-        }`}
+        className={`font-display font-bold tracking-tight ${
+          light ? "text-white" : "text-ink"
+        } ${compact ? "text-lg" : "text-xl"}`}
       >
         Spend
       </span>
