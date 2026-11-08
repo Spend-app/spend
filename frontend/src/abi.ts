@@ -18,6 +18,7 @@ export const spendAbi = parseAbi([
   "function writeDownFactor() external view returns (uint256)",
   "function DECIMAL_PRECISION() external view returns (uint256)",
   "function minUserICR() external view returns (uint256)",
+  "function liquidationICR() external view returns (uint256)",
   "function pauseICR() external view returns (uint256)",
   "function minBorrow() external view returns (uint256)",
   "function maxBorrow() external view returns (uint256)",
@@ -44,11 +45,14 @@ export const spendAbi = parseAbi([
   "function getUserPosition(address user) external view returns (uint256 originalBtc, uint256 currentBtcClaim, uint256 principal, uint256 accruedInterest, uint256 totalOwed, bool active)",
   "function getTotalOwed(address user) external view returns (uint256)",
   "function getUserICR(address user) external view returns (uint256)",
+  "function getActiveBorrowers() external view returns (address[])",
+  "function getActiveBorrowerCount() external view returns (uint256)",
 
   // User Mutators
   "function borrow(uint256 musdAmount, address upperHint, address lowerHint) external payable",
   "function repay(address upperHint, address lowerHint) external",
   "function claimInWindDown() external",
+  "function liquidateUser(address user) external",
 
   // Solvency & Maintenance Mutators
   "function enterWindDown() external",
@@ -66,6 +70,7 @@ export const spendAbi = parseAbi([
   "function withdrawBTC(address payable to, uint256 amount) external",
   "function setPaused(bool _paused) external",
   "function setMinUserICR(uint256 _icr) external",
+  "function setLiquidationICR(uint256 _icr) external",
   "function setPauseICR(uint256 _icr) external",
   "function setBorrowLimits(uint256 _min, uint256 _max) external",
   "function setBufferThreshold(uint256 _threshold) external",
@@ -90,6 +95,8 @@ export const spendAbi = parseAbi([
   "event WriteDownApplied(uint256 oldTotalBtcClaimed, uint256 newTotalBtcClaimed, uint256 masterCollateral)",
   "event WindDownEntered(address indexed caller)",
   "event ClaimedInWindDown(address indexed user, uint256 btcClaimed, uint256 principalForgiven)",
+  "event UserLiquidated(address indexed user, uint256 principal, uint256 forfeitedBtc, uint256 userIcr, address indexed liquidator)",
+  "event LiquidationICRUpdated(uint256 oldICR, uint256 newICR)",
 ]);
 
 /**

@@ -1,20 +1,20 @@
-### Live deployment status (verified 2026-10-25 via RPC `https://rpc.test.mezo.org`, chainId 31611)
+### Live deployment status (Mezo testnet, chainId 31611)
 
-Spend contract `0xD4f45a4A2B0EF9B64b2dA17c8287F5B429b00513` **answered every view call**:
+Spend contract `0xdADB2C17199E2247C3FB65E75F62Db6bAFc4b7a0` (Wave 2 Solvency & User Liquidation upgraded):
 
 | Call                         | Live value                                 |
 | ---------------------------- | ------------------------------------------ |
-| `masterOpened()`             | `true` — Master Trove is open              |
-| `paused()`                   | `false` — borrowing is open                |
-| `getPrice()`                 | 80,383.63 USD/BTC (oracle)                 |
-| `getCashBuffer()`            | 1,740.30 MUSD funded                       |
-| `getMasterICR()`             | 285.6% (in 250–300% target zone)           |
-| `getMasterInterestRateBps()` | 100 bps (1.00% fixed)                      |
+| `masterOpened()`             | `false` — Fresh deployment (awaiting `openMasterTrove`) |
+| `paused()`                   | `false` — borrowing ready once master opens |
+| `getCashBuffer()`            | 0 MUSD                                     |
+| `getMasterICR()`             | 0 (Master Trove not yet funded)            |
+| `liquidationICR`             | 130% (1.30e18)                             |
 | `minBorrow` / `maxBorrow`    | 10 / 500 MUSD                              |
-| `userInterestRate`           | 4.00% (simple, 1e16)                       |
+| `userInterestRate`           | 4.00% simple APR (1e16)                    |
 | `originationFeeBps`          | 30 (0.30%)                                 |
 | `bufferThreshold`            | 500 MUSD                                   |
-| `totalUserPrincipal`         | 60 MUSD in active user loans               |
+| `totalUserPrincipal`         | 0 MUSD                                     |
+| `activeBorrowerCount`        | 0                                          |
 | `owner()`                    | 0xb43c9f0f2bb65a37761e7867a6f1903799f45d65 |
 
 ---

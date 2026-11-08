@@ -39,12 +39,13 @@ In response to the audit and feedback, Spend underwent a complete architectural 
 | Feature / Area | Wave 1 Baseline | Wave 2 Upgrade |
 |---|---|---|
 | **Collateral Loss Accounting** | No handling for redemptions; ledger assumed 100% of deposited BTC was always present. | **Pro-Rata Write-Down Engine**: Monotonically decreasing `writeDownFactor` scales user BTC claims proportionately if Mezo redeems or liquidates master collateral. |
-| **Repayment Handling** | All repaid MUSD remained in the cash buffer; master debt was never reduced, progressively degrading master ICR. | **Smart Master Debt Reduction**: Repaid MUSD fills the cash buffer to `bufferThreshold`, and any excess automatically pays down master Trove debt (respecting Mezo's `minNetDebt`). |
-| **Closed Trove Handling** | If Mezo redeemed or liquidated the master Trove, `repay()` reverted and user collateral was permanently locked. | **Dedicated Wind-Down Mode & Exit Path**: `claimInWindDown()` allows users to claim their pro-rata collateral and automatically forgives outstanding principal debt. Users are never frozen. |
+| **Repayment Handling** | All repaid MUSD remained in the cash buffer; master debt was never reduced, progressively degrading master ICR. | **Smart Master Debt Reduction**: Repaid MUSD pays down Mezo master debt (capped at user principal) while strictly protecting the 1,810 MUSD floor to satisfy Mezo's debt minimum. |
+| **Closed Trove Handling** | If Mezo redeemed or liquidated the master Trove, `repay()` reverted and user collateral was permanently locked. | **Dedicated Wind-Down Mode & Exit Path**: `claimInWindDown()` returns pro-rata recovered surplus BTC (if available) and automatically forgives outstanding principal debt. Users are never frozen. |
+| **Insolvent Position Risk** | No individual liquidation; underwater positions (< 150% ICR) accumulated bad debt in the pool. | **Internal User Liquidation**: `liquidateUser()` clears positions falling below 130% ICR, forfeiting user collateral to the master reserve to fortify protocol solvency. |
 | **Collateral Recovery** | Redemption leftovers in Mezo's `CollSurplusPool` were unhandled. | **Surplus Pool Integration**: `claimMasterCollateral()` / auto-claim pulls surplus BTC into Spend, softening write-downs for users. |
 | **Recovery Mode** | Minimal handling during Mezo system stress. | **Full Recovery Mode Safeguards**: New borrows are strictly blocked; repayments check projected ICR against `CCR` (150%) / `MCR` (110%) before withdrawing collateral. |
 | **Borrow Mutation** | Multi-step interactions that could invalidate hints. | **Atomic `adjustTrove` Execution**: User collateral deposit and buffer top-up execute in a single atomic transaction. |
-| **Verification & Testing** | Manual testnet scripts. | **Complete Foundry Test Suite**: 100% passing automated unit and integration tests covering normal flows, pro-rata write-downs, recovery mode, and wind-down exits. |
+| **Verification & Testing** | Manual testnet scripts. | **Complete Foundry Test Suite**: 7 automated unit and integration tests covering normal flows, pro-rata write-downs, recovery mode, user liquidations, and wind-down exits. |
 
 ---
 
@@ -74,17 +75,19 @@ When a user repays their micro-loan:
 [ User ] --( 1. Repay MUSD + Interest )--> [ Spend Contract ]
                                                   |
            +--------------------------------------+--------------------------------------+
-           | (Top up Cash Buffer)                                                        | (Pay Down Master Trove Debt)
+           | (When Master Debt <= 1,810 Floor)                                           | (When Master Debt > 1,810 Floor)
            v                                                                             v
-[ Keep MUSD up to bufferThreshold ]                            [ Call Mezo repayMUSD for Excess (capped at minNetDebt) ]
+[ Retain MUSD in Contract Cash Buffer ]                       [ Call Mezo repayMUSD (Capped at user principal) ]
                                                   |
                                                   v
                      [ Withdraw User's Pro-Rata Claimed BTC & Return to User ]
 ```
 
 1. **User Repayment:** The user approves and pays their total debt (`principal + simple interest`).
-2. **Buffer Prioritization:** The contract ensures the cash buffer maintains at least `bufferThreshold` (default: 500 MUSD).
-3. **Automatic Master Debt Paydown:** Any MUSD received beyond `bufferThreshold` is automatically routed to Mezo via `borrowerOperations.repayMUSD()`, paying down the master Trove debt while strictly respecting Mezo's `minNetDebt` (1,800 MUSD).
+2. **Buffer Cushion Check:** The contract checks if the buffer holds excess funds above `bufferThreshold` ($500$ MUSD). Because `borrow()` automatically mints from Mezo when funding loans, the buffer is already well-stocked.
+3. **Capped Master Debt Paydown:** If excess exists, the contract pays down Mezo master debt:
+   - **User Principal Cap:** The paydown is strictly capped at `pos.principal`, ensuring a single micro-repayment never dumps the entire cash buffer into Mezo.
+   - **The 1,810 MUSD Safe Floor:** Mezo's `BorrowerOperations.repayMUSD()` strictly requires `newNetDebt > minNetDebt` ($1,800$ MUSD). Spend enforces an exact **1,810 MUSD floor** (`minNetDebt + 10 MUSD`). If master debt reaches 1,810 MUSD, further master debt repayments pause automatically and MUSD accumulates safely in the buffer.
 4. **Collateral Return:** The user receives their effective BTC claim back (`originalBtc * writeDownFactor / 1e18`).
 
 ### 3.3 Pro-Rata Write-Down Engine
@@ -98,16 +101,25 @@ $$\text{effectiveClaim} = \frac{\text{userOriginalBtc} \times \text{writeDownFac
 - **Fair Accounting:** If the master Trove loses 15% of its collateral in a redemption, all user claims scale down by 15% synchronously.
 - **Surplus Softening:** Leftover collateral in Mezo's `CollSurplusPool` can be claimed by anyone via `claimMasterCollateral()`, adding back to `availableBTC` before applying write-downs.
 
-### 3.4 Wind-Down Mode & Exit Path
-If extreme market conditions or a full Mezo redemption causes the master Trove to close:
-1. Anyone can trigger `enterWindDown()`.
-2. Spend automatically claims any available collateral from Mezo's `CollSurplusPool` and locks the write-down factor.
+### 3.4 Wind-Down Mode & Exit Reality
+If extreme market stress or a full Mezo redemption causes the master Trove to close on Mezo:
+1. Anyone can call `enterWindDown()`.
+2. Spend automatically calls `borrowerOperations.claimCollateral()` to rescue any residual collateral from Mezo's `CollSurplusPool`.
 3. New borrowing is permanently stopped.
 4. Users call `claimInWindDown()`:
-   - Receives their fair pro-rata share of all recovered BTC.
-   - Outstanding user principal debt is completely **forgiven**.
-   - Position is closed cleanly.
-   - **Guaranteed Outcome:** Zero user funds are permanently trapped.
+   - **Pro-Rata Collateral Return:** If Mezo left a surplus in `CollSurplusPool`, users receive their pro-rata share of that recovered BTC. If Mezo liquidated the master Trove with zero surplus, available BTC is zero and users receive 0 BTC.
+   - **Debt Forgiveness:** Outstanding user principal debt is completely **forgiven**. Borrowers are never chased for unpaid MUSD and keep the liquidity they borrowed.
+   - Position is closed cleanly. Users are never frozen.
+
+### 3.5 Internal User Liquidation (`liquidateUser`)
+To prevent underwater borrower positions from building up bad debt inside the pooled master reserve:
+1. **Liquidation Threshold:** Default set at **130% ICR** (`liquidationICR`, owner-configurable between 115% and 145%).
+2. **Trigger:** Anyone, a keeper, or the protocol admin can call `liquidateUser(address user)` when `getUserICR(user) < liquidationICR`.
+3. **Solvency Benefit:**
+   - The borrower's loan is removed from `totalUserPrincipal`.
+   - Their collateral claim is deleted from `totalOriginalBtc`.
+   - **The borrower's BTC collateral remains permanently inside Mezo's master Trove.** Because the position is liquidated at ~130% ICR, Spend retains 130 cents of BTC for every 100 cents of loan debt, immediately improving the master reserve's collateral ratio for all remaining borrowers.
+4. **On-Chain Borrower Registry:** Spend maintains an `activeBorrowers` array with $O(1)$ swap-and-pop tracking, exposing live borrower health in the Admin Operations dashboard with one-click liquidation buttons.
 
 ---
 
@@ -129,6 +141,7 @@ Spend operates with a transparent, sustainable fee model:
 | Parameter | Value | Purpose |
 |---|---|---|
 | `minUserICR` | 150% | Minimum Individual Collateral Ratio required from users at loan inception. |
+| `liquidationICR` | 130% | User liquidation threshold; positions below 130% ICR can be liquidated by anyone. |
 | `pauseICR` | 220% | Master Trove ICR safety threshold; new borrows automatically pause if master ICR falls below this mark. |
 | `minBorrow` | 10 MUSD | Prevents dust transactions. |
 | `maxBorrow` | 500 MUSD | Caps single-user exposure to limit individual systemic risk. |
@@ -144,7 +157,8 @@ The protocol implementation is contained in [`contract/src/Spend.sol`](file:///h
 
 ### Core Mutators
 - `borrow(uint256 musdAmount, address upperHint, address lowerHint)`: Deposits BTC and disburses MUSD to user.
-- `repay(address upperHint, address lowerHint)`: Repays MUSD principal + interest, returns pro-rata BTC, and pays down master debt.
+- `repay(address upperHint, address lowerHint)`: Repays MUSD principal + interest, returns pro-rata BTC, and pays down master debt (respecting the 1,810 floor).
+- `liquidateUser(address user)`: Liquidates underwater user position (< 130% ICR), forfeiting collateral to the master reserve.
 - `enterWindDown()`: Enters wind-down mode when the master Trove is closed by Mezo.
 - `claimInWindDown()`: Wind-down exit function for users to claim remaining BTC and forgive remaining debt.
 - `syncWriteDown()`: Publicly callable function to sync the write-down factor against real Mezo collateral.
@@ -158,6 +172,8 @@ The protocol implementation is contained in [`contract/src/Spend.sol`](file:///h
 - `getRequiredBTC(uint256 musdAmount)`: Computes exact BTC required to open a loan at current oracle prices.
 - `getUserPosition(address user)`: Returns user position details including original deposit, current effective claim, principal, and accrued interest.
 - `getUserICR(address user)`: Returns individual collateral ratio for a user position.
+- `getActiveBorrowers()`: Returns on-chain array of currently active borrower addresses.
+- `getActiveBorrowerCount()`: Returns total number of active borrowers.
 - `isInWindDown()`: Returns protocol wind-down status.
 
 ---
@@ -175,10 +191,13 @@ forge test -vvv
 
 | Test Name | Gas | Scenario Tested |
 |---|---|---|
-| `test_BorrowAndRepay_Normal` | 286,457 | Alice borrows 100 MUSD against BTC. Validates buffer distribution, fees, and clean repayment with exact BTC return. |
-| `test_ProRataWriteDown_OnRedemption` | 423,405 | Simulates a Mezo redemption taking 20% of master collateral. Proves user claims scale down pro-rata, preventing pool underflow. |
-| `test_RecoveryMode_BlocksNewBorrows` | 53,720 | Simulates Mezo entering system-wide Recovery Mode. Verifies that `borrow()` immediately reverts. |
-| `test_WindDownExit_WhenMasterTroveClosed` | 244,314 | Simulates master Trove closure by Mezo. Verifies `enterWindDown()`, collateral claim, and `claimInWindDown()` debt forgiveness without reverting. |
+| `test_BorrowAndRepay_Normal` | 316,400 | Alice borrows 100 MUSD against BTC. Validates buffer distribution, fees, and clean repayment with exact BTC return. |
+| `test_ProRataWriteDown_OnRedemption` | 480,725 | Simulates a Mezo redemption taking 20% of master collateral. Proves user claims scale down pro-rata, preventing pool underflow. |
+| `test_RecoveryMode_BlocksNewBorrows` | 53,924 | Simulates Mezo entering system-wide Recovery Mode. Verifies that `borrow()` immediately reverts. |
+| `test_WindDownExit_WhenMasterTroveClosed` | 283,273 | Simulates master Trove closure by Mezo. Verifies `enterWindDown()`, collateral claim, and `claimInWindDown()` debt forgiveness without reverting. |
+| `test_LiquidateUser_Healthy_Reverts` | 333,856 | Verifies that attempting to liquidate a healthy position (>= 130% ICR) strictly reverts with "Position is healthy". |
+| `test_LiquidateUser_Underwater_Succeeds` | 289,864 | Simulates BTC price drop dropping Alice to 112% ICR. Verifies liquidation clears debt and leaves collateral in master Trove. |
+| `test_ActiveBorrowers_Tracking` | 658,765 | Validates O(1) swap-and-pop borrower tracking across multiple simultaneous borrows and repayments. |
 
 ---
 
@@ -188,6 +207,9 @@ forge test -vvv
 - **Chain ID:** `31611`
 - **RPC URL:** `https://rpc.test.mezo.org`
 
+### Deployed Spend Protocol
+- **Spend Contract:** [`0xdADB2C17199E2247C3FB65E75F62Db6bAFc4b7a0`](https://explorer.test.mezo.org/address/0xdADB2C17199E2247C3FB65E75F62Db6bAFc4b7a0)
+
 ### Verified Mezo Protocol Addresses
 - **BorrowerOperations:** `0xCdF7028ceAB81fA0C6971208e83fa7872994beE5`
 - **TroveManager:** `0xE47c80e8c23f6B4A1aE41c34837a0599D5D16bb0`
@@ -195,3 +217,26 @@ forge test -vvv
 - **MUSD Token:** `0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503`
 - **SortedTroves:** `0x722E4D24FD6Ff8b0AC679450F3D91294607268fA`
 - **HintHelpers:** `0x4e4cBA3779d56386ED43631b4dCD6d8EacEcBCF6`
+
+---
+
+## 9. Quick Start & Local Development
+
+### Smart Contracts (Foundry)
+```bash
+cd contract
+forge test -vvv
+```
+
+### Frontend Application (Vite + React + Wagmi)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+To build for production:
+```bash
+cd frontend
+npm run build
+```

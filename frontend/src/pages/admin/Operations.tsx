@@ -1,6 +1,6 @@
 import { ExternalLink } from "lucide-react";
 import { useApp } from "../../context/AppContext";
-import { musd, short } from "../../lib/format";
+import { btc, musd, pct, short } from "../../lib/format";
 import { Button, Card, Row, SectionTitle } from "../../components/ui";
 import { MEZO_ADDRESSES, SPEND_CONTRACT_ADDRESS } from "../../config/contracts";
 import { Action, tx } from "./common";
@@ -15,6 +15,9 @@ export default function AdminOperations() {
     syncWriteDown,
     enterWindDown,
     masterState,
+    activeBorrowers,
+    liquidateUser,
+    config,
   } = useApp();
 
   const togglePause = async () => {
@@ -54,6 +57,113 @@ export default function AdminOperations() {
 
   return (
     <div className="space-y-6">
+      {/* Active Borrowers & Liquidation Table */}
+      <Card>
+        <div className="flex items-center justify-between">
+          <SectionTitle
+            title="Active Borrower Positions & Liquidation"
+            hint={`Live health of open micro-loans. Positions below ${pct(config.liquidationICR)} can be liquidated to safeguard the master reserve.`}
+          />
+          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-soft text-mute">
+            {activeBorrowers.length} active {activeBorrowers.length === 1 ? "loan" : "loans"}
+          </span>
+        </div>
+
+        {activeBorrowers.length === 0 ? (
+          <div className="py-8 text-center text-sm text-mute">
+            No active borrower loans currently on Spend.
+          </div>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-line text-xs font-semibold text-mute uppercase tracking-wider">
+                  <th className="pb-3 pl-1">Borrower</th>
+                  <th className="pb-3 text-right">Debt</th>
+                  <th className="pb-3 text-right">Collateral</th>
+                  <th className="pb-3 text-right">ICR</th>
+                  <th className="pb-3 text-center">Status</th>
+                  <th className="pb-3 text-right pr-1">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {activeBorrowers.map((borrower) => {
+                  const isSafe = borrower.icr >= config.minUserICR;
+                  const isUnder = borrower.isLiquidatable;
+                  return (
+                    <tr
+                      key={borrower.address}
+                      className="hover:bg-soft/50 transition-colors"
+                    >
+                      <td className="py-3 pl-1 font-mono text-xs font-medium">
+                        <a
+                          href={`https://explorer.test.mezo.org/address/${borrower.address}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1 text-primary hover:underline"
+                        >
+                          {short(borrower.address)}
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </td>
+                      <td className="py-3 text-right tabular-nums font-medium text-ink">
+                        {musd(borrower.totalOwed, 2)}
+                      </td>
+                      <td className="py-3 text-right tabular-nums text-mute">
+                        {btc(borrower.currentBtcClaim)}
+                      </td>
+                      <td className="py-3 text-right tabular-nums font-semibold">
+                        <span
+                          className={
+                            isUnder
+                              ? "text-red-700"
+                              : isSafe
+                                ? "text-emerald-700"
+                                : "text-amber-700"
+                          }
+                        >
+                          {pct(borrower.icr)}
+                        </span>
+                      </td>
+                      <td className="py-3 text-center">
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+                            isUnder
+                              ? "bg-red-100 text-red-800"
+                              : isSafe
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-amber-100 text-amber-800"
+                          }`}
+                        >
+                          {isUnder ? "Liquidatable" : isSafe ? "Safe" : "Low"}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right pr-1">
+                        {isUnder ? (
+                          <Button
+                            variant="danger"
+                            onClick={() =>
+                              tx(
+                                `Position ${short(borrower.address)} liquidated`,
+                                () => liquidateUser(borrower.address),
+                              )
+                            }
+                          >
+                            Liquidate
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-mute/50">Healthy</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
       <Card>
         <SectionTitle
           title="Protocol Safety & Maintenance"

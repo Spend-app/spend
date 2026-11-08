@@ -87,17 +87,19 @@ export default function Position({ go }: { go?: (t: Tab) => void }) {
   const owed = position.principal + interest;
   const ratio = icr(position.btc, price, owed);
 
-  const inZone = ratio <= config.liquidationStart;
+  const liqThreshold = config.liquidationICR || 130;
+  const inZone = ratio <= liqThreshold;
+  const isNearLiquidation = ratio < liqThreshold + 15;
   const status =
     ratio >= config.minUserICR
       ? { tone: "green" as const, label: "Safe" }
       : !inZone
-        ? { tone: "amber" as const, label: "Getting close" }
-        : { tone: "red" as const, label: "At risk" };
+        ? { tone: "amber" as const, label: "Low collateral" }
+        : { tone: "red" as const, label: "Liquidatable" };
 
-  // How far the Bitcoin price can fall before the loan becomes risky
-  const dropPct = Math.max(0, (1 - config.liquidationStart / ratio) * 100);
-  const riskPrice = (price * config.liquidationStart) / ratio;
+  // How far the Bitcoin price can fall before the loan becomes liquidatable
+  const dropPct = Math.max(0, (1 - liqThreshold / ratio) * 100);
+  const riskPrice = (price * liqThreshold) / ratio;
 
   const enough = musdBalance >= owed;
 
@@ -210,6 +212,20 @@ export default function Position({ go }: { go?: (t: Tab) => void }) {
         />
         <Stat label="Bitcoin price" value={usd(price, 0)} sub="Right now" />
       </div>
+
+      {isNearLiquidation && !masterState.windDown && (
+        <Notice tone="amber">
+          {inZone ? (
+            <span>
+              <strong>Critical Liquidation Warning:</strong> Your collateral ratio ({pct(ratio)}) is at or below the {pct(liqThreshold)} liquidation threshold. Your position is eligible for liquidation. Repay immediately to reclaim your Bitcoin.
+            </span>
+          ) : (
+            <span>
+              <strong>Low Collateral Warning:</strong> Your collateral ratio ({pct(ratio)}) is approaching the {pct(liqThreshold)} liquidation threshold. If Bitcoin drops to {usd(riskPrice, 0)}, your position can be liquidated.
+            </span>
+          )}
+        </Notice>
+      )}
 
       {masterState.windDown ? (
         <Card>

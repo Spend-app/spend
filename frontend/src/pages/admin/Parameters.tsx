@@ -9,6 +9,7 @@ export default function AdminParameters() {
     updateBorrowLimits,
     updateBufferThreshold,
     updateMinUserICR,
+    updateLiquidationICR,
     updatePauseICR,
     updateOriginationFeeBps,
     updateUserInterestRate,
@@ -69,8 +70,24 @@ export default function AdminParameters() {
             onSave={async (n) => {
               if (n < 130 || n > 300)
                 throw new Error("Enter between 130% and 300%.");
+              if (n <= config.liquidationICR)
+                throw new Error("minUserICR must be higher than liquidation threshold.");
               await tx("Lowest safety level updated", () =>
                 updateMinUserICR(n),
+              );
+            }}
+          />
+          <SettingRow
+            label="User Liquidation Threshold (liquidationICR)"
+            current={pct(config.liquidationICR)}
+            unit="%"
+            onSave={async (n) => {
+              if (n < 115 || n > 145)
+                throw new Error("Enter between 115% and 145%.");
+              if (n >= config.minUserICR)
+                throw new Error("Liquidation threshold must be below minUserICR.");
+              await tx("Liquidation threshold updated", () =>
+                updateLiquidationICR(n),
               );
             }}
           />

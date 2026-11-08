@@ -55,6 +55,7 @@ export interface AppConfig {
   minBorrow: number;
   maxBorrow: number;
   minUserICR: number; // %
+  liquidationICR: number; // %
   pauseICR: number; // %
   originationFeeBps: number;
   userInterestRate: number; // % APR
@@ -62,6 +63,17 @@ export interface AppConfig {
   priceDriftBuffer: number;
   liquidationRange: string;
   liquidationStart: number;
+}
+
+export interface ActiveBorrowerInfo {
+  address: string;
+  originalBtc: number;
+  currentBtcClaim: number;
+  principal: number;
+  accruedInterest: number;
+  totalOwed: number;
+  icr: number; // %
+  isLiquidatable: boolean;
 }
 
 export interface MasterState {
@@ -119,6 +131,9 @@ interface AppState {
   withdrawFees: (to: string, amount: number) => Promise<void>;
   extractMUSD: (to: string, amount: number) => Promise<void>;
   withdrawBTC: (to: string, amount: number) => Promise<void>;
+  activeBorrowers: ActiveBorrowerInfo[];
+  liquidateUser: (userAddress: string) => Promise<void>;
+  updateLiquidationICR: (icrPct: number) => Promise<void>;
   updateBorrowLimits: (min: number, max: number) => Promise<void>;
   updateMinUserICR: (icrPct: number) => Promise<void>;
   updatePauseICR: (icrPct: number) => Promise<void>;
@@ -325,6 +340,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         abi: spendAbi,
         functionName: "writeDownFactor",
       },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "liquidationICR",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "getActiveBorrowers",
+      },
     ],
     query: {
       refetchInterval: 12_000,
@@ -376,11 +401,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       | undefined;
     const userInterestRateRaw = protocolData?.[9]?.result as bigint | undefined;
     const bufferThresholdRaw = protocolData?.[10]?.result as bigint | undefined;
+    const liquidationICRRaw = protocolData?.[21]?.result as bigint | undefined;
 
     return {
       minBorrow: toNum(minBorrowRaw, 18),
       maxBorrow: toNum(maxBorrowRaw, 18),
       minUserICR: toNum(minUserICRRaw, 16),
+      liquidationICR:
+        liquidationICRRaw !== undefined ? toNum(liquidationICRRaw, 16) : 130,
       pauseICR: toNum(pauseICRRaw, 16),
       originationFeeBps:
         originationFeeBpsRaw !== undefined ? Number(originationFeeBpsRaw) : 0,
@@ -432,6 +460,68 @@ export function AppProvider({ children }: { children: ReactNode }) {
         : 0,
     };
   }, [protocolData, masterOpened, owner, contractBtcData]);
+
+  // Active Borrowers Reads
+  const activeBorrowerAddresses = useMemo(() => {
+    return (protocolData?.[22]?.result as string[]) || [];
+  }, [protocolData]);
+
+  const borrowerContracts = useMemo(() => {
+    return activeBorrowerAddresses.flatMap((addr) => [
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "getUserPosition",
+        args: [addr],
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "getUserICR",
+        args: [addr],
+      },
+    ]);
+  }, [activeBorrowerAddresses]);
+
+  const { data: borrowerData, refetch: refetchBorrowers } = useReadContracts({
+    contracts: borrowerContracts as any,
+    query: {
+      enabled: activeBorrowerAddresses.length > 0,
+      refetchInterval: 10_000,
+    },
+  });
+
+  const activeBorrowers: ActiveBorrowerInfo[] = useMemo(() => {
+    if (!activeBorrowerAddresses.length || !borrowerData) return [];
+    const list: ActiveBorrowerInfo[] = [];
+    for (let i = 0; i < activeBorrowerAddresses.length; i++) {
+      const addr = activeBorrowerAddresses[i];
+      const posRes = borrowerData[i * 2]?.result as
+        | [bigint, bigint, bigint, bigint, bigint, boolean]
+        | undefined;
+      const icrRes = borrowerData[i * 2 + 1]?.result as bigint | undefined;
+      if (posRes && posRes[5]) {
+        const originalBtc = toNum(posRes[0], 18);
+        const currentBtcClaim = toNum(posRes[1], 18);
+        const principal = toNum(posRes[2], 18);
+        const accruedInterest = toNum(posRes[3], 18);
+        const totalOwed = toNum(posRes[4], 18);
+        const icr = icrRes !== undefined ? toNum(icrRes, 16) : 0;
+        const isLiquidatable = icr < config.liquidationICR;
+        list.push({
+          address: addr,
+          originalBtc,
+          currentBtcClaim,
+          principal,
+          accruedInterest,
+          totalOwed,
+          icr,
+          isLiquidatable,
+        });
+      }
+    }
+    return list;
+  }, [activeBorrowerAddresses, borrowerData, config.liquidationICR]);
 
   // Parse User Position
   const position: Position | null = useMemo(() => {
@@ -486,6 +576,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       refetchAllowance(),
       refetchPosition(),
       refetchProtocol(),
+      refetchBorrowers(),
     ]);
   }, [
     refetchBtc,
@@ -494,6 +585,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     refetchAllowance,
     refetchPosition,
     refetchProtocol,
+    refetchBorrowers,
   ]);
 
   // Actions
@@ -918,6 +1010,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [address, writeContractAsync, publicClient, refetchProtocol],
   );
 
+  const liquidateUser = useCallback(
+    async (userAddress: string) => {
+      if (!address) throw new Error("Please connect your wallet first.");
+      const hash = await writeContractAsync({
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "liquidateUser",
+        args: [userAddress as `0x${string}`],
+      });
+      if (publicClient) {
+        await publicClient.waitForTransactionReceipt({ hash });
+      }
+      await refetchAll();
+    },
+    [address, writeContractAsync, publicClient, refetchAll],
+  );
+
+  const updateLiquidationICR = useCallback(
+    async (icrPct: number) => {
+      if (!address) throw new Error("Please connect your wallet first.");
+      const hash = await writeContractAsync({
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "setLiquidationICR",
+        args: [parseUnits(icrPct.toString(), 16)],
+      });
+      if (publicClient) {
+        await publicClient.waitForTransactionReceipt({ hash });
+      }
+      await refetchProtocol();
+    },
+    [address, writeContractAsync, publicClient, refetchProtocol],
+  );
+
   const value = useMemo<AppState>(
     () => ({
       connected: isConnected,
@@ -934,6 +1060,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       musdPrice,
       config,
       masterState,
+      activeBorrowers,
+      liquidateUser,
+      updateLiquidationICR,
       isOwner,
       connect,
       disconnect,
@@ -977,6 +1106,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       musdPrice,
       config,
       masterState,
+      activeBorrowers,
+      liquidateUser,
+      updateLiquidationICR,
       isOwner,
       connect,
       disconnect,

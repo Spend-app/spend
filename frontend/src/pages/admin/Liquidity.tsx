@@ -32,9 +32,9 @@ export default function AdminLiquidity() {
     if (!(n > 0)) throw new Error("Enter an amount of MUSD.");
     if (n > masterState.cashBuffer)
       throw new Error(`You only have ${musd(masterState.cashBuffer, 0)} in buffer.`);
-    const maxPaydown = Math.max(0, masterState.debt - 1800);
+    const maxPaydown = Math.max(0, masterState.debt - 1810);
     if (n > maxPaydown)
-      throw new Error(`Cannot drop below Mezo's 1,800 MUSD minimum net debt. Max paydown possible is ${musd(maxPaydown, 2)}.`);
+      throw new Error(`Cannot drop below Mezo's 1,810 MUSD safe debt floor. Max paydown possible is ${musd(maxPaydown, 2)}.`);
     await tx(`Paid down ${musd(n, 0)} of master debt`, () =>
       decreaseMasterDebt(n),
     );

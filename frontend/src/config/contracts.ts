@@ -2,7 +2,7 @@ import type { Address } from "viem";
 
 export const SPEND_CONTRACT_ADDRESS: Address = (
   import.meta.env.VITE_SPEND_CONTRACT_ADDRESS ||
-  "0xB64db9018CE6B726f2E22E16548C5d47731ea5DC"
+  "0xdADB2C17199E2247C3FB65E75F62Db6bAFc4b7a0"
 ) as Address;
 
 export const MUSD_CONTRACT_ADDRESS: Address = (

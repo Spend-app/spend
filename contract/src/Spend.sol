@@ -95,6 +95,7 @@ contract Spend {
     uint256 public constant BPS = 10_000;
 
     uint256 public minUserICR = 150e16;         // 150% min collateral ratio per user
+    uint256 public liquidationICR = 130e16;     // 130% liquidation threshold
     uint256 public pauseICR = 220e16;           // Master ICR threshold to pause new borrows
     uint256 public minBorrow = 10e18;           // Minimum loan in MUSD
     uint256 public maxBorrow = 500e18;          // Maximum loan in MUSD
@@ -110,6 +111,8 @@ contract Spend {
         bool active;
     }
     mapping(address => Position) public positions;
+    address[] public activeBorrowers;
+    mapping(address => uint256) private borrowerIndex;
     uint256 public totalUserPrincipal;
     uint256 public totalOriginalBtc;
 
@@ -142,6 +145,14 @@ contract Spend {
     event WriteDownApplied(uint256 oldTotalBtcClaimed, uint256 newTotalBtcClaimed, uint256 masterCollateral);
     event WindDownEntered(address indexed caller);
     event ClaimedInWindDown(address indexed user, uint256 btcClaimed, uint256 principalForgiven);
+    event UserLiquidated(
+        address indexed user,
+        uint256 principal,
+        uint256 forfeitedBtc,
+        uint256 userIcr,
+        address indexed liquidator
+    );
+    event LiquidationICRUpdated(uint256 oldICR, uint256 newICR);
 
     // ============ Modifiers ============
     modifier onlyOwner() {
@@ -264,7 +275,15 @@ contract Spend {
 
     function setMinUserICR(uint256 _icr) external onlyOwner {
         require(_icr >= 130e16 && _icr <= 300e16, "Out of bounds");
+        require(_icr > liquidationICR, "Must be higher than liquidationICR");
         minUserICR = _icr;
+    }
+
+    function setLiquidationICR(uint256 _icr) external onlyOwner {
+        require(_icr >= 115e16 && _icr <= 145e16, "Out of bounds");
+        require(_icr < minUserICR, "Must be lower than minUserICR");
+        emit LiquidationICRUpdated(liquidationICR, _icr);
+        liquidationICR = _icr;
     }
 
     function setPauseICR(uint256 _icr) external onlyOwner {
@@ -359,6 +378,7 @@ contract Spend {
         totalUserPrincipal -= pos.principal;
         totalOriginalBtc -= pos.originalBtc;
         delete positions[msg.sender];
+        _removeBorrower(msg.sender);
         if (payBtc > 0) {
             require(address(this).balance >= payBtc, "Short pool");
             (bool ok, ) = msg.sender.call{value: payBtc}("");
@@ -417,6 +437,7 @@ contract Spend {
         });
         totalUserPrincipal += musdAmount;
         totalOriginalBtc += msg.value;
+        _addBorrower(msg.sender);
 
         emit Borrowed(msg.sender, musdToUser, msg.value, fee, musdAmount);
     }
@@ -444,6 +465,7 @@ contract Spend {
         totalUserPrincipal -= pos.principal;
         totalOriginalBtc -= pos.originalBtc;
         delete positions[msg.sender];
+        _removeBorrower(msg.sender);
 
         require(musd.transferFrom(msg.sender, address(this), totalOwed), "TransferFrom failed");
         grossFees += interest;
@@ -453,9 +475,13 @@ contract Spend {
         if (bufferNow > bufferThreshold) {
             uint256 excess = bufferNow - bufferThreshold;
             uint256 maxPayable = _maxMasterPaydown();
-            uint256 pay = excess < maxPayable ? excess : maxPayable;
+            uint256 pay = pos.principal < excess ? pos.principal : excess;
+            if (pay > maxPayable) {
+                pay = maxPayable;
+            }
             if (pay > 0) {
                 borrowerOperations.repayMUSD(pay, upperHint, lowerHint);
+                emit MasterDebtDecreased(pay);
             }
         }
 
@@ -478,6 +504,35 @@ contract Spend {
         }
 
         emit Repaid(msg.sender, totalOwed, payBtc);
+    }
+
+    // ============ Core: Liquidation ============
+
+    /**
+     * @notice Liquidates an underwater borrower position whose ICR has fallen below liquidationICR.
+     * @dev Collateral is forfeited to the master reserve, bolstering master Trove ICR and equity.
+     * @param user The address of the borrower to liquidate.
+     */
+    function liquidateUser(address user) external nonReentrant {
+        require(!windDown, "Use claimInWindDown");
+        require(troveManager.getTroveStatus(address(this)) == ITroveManager.TroveStatus.active, "ClosedByMezo");
+        _applyWriteDownIfNeeded();
+
+        Position storage pos = positions[user];
+        require(pos.active, "No position");
+
+        uint256 icr = getUserICR(user);
+        require(icr < liquidationICR, "Position is healthy");
+
+        uint256 principal = pos.principal;
+        uint256 forfeitedBtc = pos.originalBtc;
+
+        totalUserPrincipal -= principal;
+        totalOriginalBtc -= forfeitedBtc;
+        delete positions[user];
+        _removeBorrower(user);
+
+        emit UserLiquidated(user, principal, forfeitedBtc, icr, msg.sender);
     }
 
     // ============ Views ============
@@ -561,7 +616,7 @@ contract Spend {
         return pos.principal + _accruedInterest(pos.principal, pos.startTime);
     }
 
-    function getUserICR(address user) external view returns (uint256) {
+    function getUserICR(address user) public view returns (uint256) {
         Position memory pos = positions[user];
         if (!pos.active || pos.principal == 0) return type(uint256).max;
         uint256 price = priceFeed.fetchPrice();
@@ -571,17 +626,48 @@ contract Spend {
         return (claim * price) / totalOwed;
     }
 
+    function getActiveBorrowers() external view returns (address[] memory) {
+        return activeBorrowers;
+    }
+
+    function getActiveBorrowerCount() external view returns (uint256) {
+        return activeBorrowers.length;
+    }
+
     function isInWindDown() external view returns (bool) {
         return windDown;
     }
 
     // ============ Internal Helpers ============
 
+    function _addBorrower(address user) internal {
+        borrowerIndex[user] = activeBorrowers.length;
+        activeBorrowers.push(user);
+    }
+
+    function _removeBorrower(address user) internal {
+        uint256 len = activeBorrowers.length;
+        if (len == 0) return;
+        uint256 idx = borrowerIndex[user];
+        if (idx >= len || activeBorrowers[idx] != user) return;
+
+        uint256 lastIdx = len - 1;
+        if (idx != lastIdx) {
+            address lastUser = activeBorrowers[lastIdx];
+            activeBorrowers[idx] = lastUser;
+            borrowerIndex[lastUser] = idx;
+        }
+        activeBorrowers.pop();
+        delete borrowerIndex[user];
+    }
+
     function _maxMasterPaydown() internal view returns (uint256) {
         uint256 principal = troveManager.getTrovePrincipal(address(this));
         uint256 minNet = borrowerOperations.minNetDebt();
-        if (principal > minNet) {
-            return principal - minNet;
+        // Maintain a safe 10 MUSD cushion above minNetDebt (1,810 MUSD floor) so Mezo's strict > minimum check is never breached
+        uint256 safeFloor = minNet + 10e18;
+        if (principal > safeFloor) {
+            return principal - safeFloor;
         }
         return 0;
     }

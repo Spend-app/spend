@@ -338,4 +338,83 @@ contract SpendTest is Test {
         vm.expectRevert("Recovery mode");
         spend.borrow{value: reqBtc}(100e18, address(0), address(0));
     }
+
+    // 5. Internal Liquidation: Reverts when user is healthy
+    function test_LiquidateUser_Healthy_Reverts() public {
+        uint256 reqBtc = spend.getRequiredBTC(100e18);
+        vm.prank(alice);
+        spend.borrow{value: reqBtc}(100e18, address(0), address(0));
+
+        // Alice's ICR is 150%, which is >= 130% liquidationICR
+        vm.prank(bob);
+        vm.expectRevert("Position is healthy");
+        spend.liquidateUser(alice);
+    }
+
+    // 6. Internal Liquidation: Succeeds when user is underwater (< 130% ICR)
+    function test_LiquidateUser_Underwater_Succeeds() public {
+        uint256 reqBtc = spend.getRequiredBTC(100e18);
+        vm.prank(alice);
+        spend.borrow{value: reqBtc}(100e18, address(0), address(0));
+
+        assertEq(spend.getActiveBorrowerCount(), 1);
+        assertEq(spend.totalUserPrincipal(), 100e18);
+        assertEq(spend.totalOriginalBtc(), reqBtc);
+
+        // Price drops by 25%: from $50,000 to $37,500
+        // ICR was 150% -> new ICR becomes 150% * 37500 / 50000 = 112.5% (< 130%)
+        pf.setPrice(37_500e18);
+        assertTrue(spend.getUserICR(alice) < spend.liquidationICR());
+
+        // Bob liquidates Alice
+        vm.prank(bob);
+        spend.liquidateUser(alice);
+
+        // Alice position is wiped
+        (, , , , , bool active) = spend.getUserPosition(alice);
+        assertFalse(active);
+        assertEq(spend.totalUserPrincipal(), 0);
+        assertEq(spend.totalOriginalBtc(), 0);
+        assertEq(spend.getActiveBorrowerCount(), 0);
+
+        // Master Trove still holds the BTC collateral, creating unencumbered protocol equity
+        assertEq(tm.coll(), 1 ether + reqBtc);
+    }
+
+    // 7. Active Borrowers List: Swap and pop tracking
+    function test_ActiveBorrowers_Tracking() public {
+        uint256 reqBtc = spend.getRequiredBTC(50e18);
+
+        // Alice, Bob, and Charlie borrow
+        vm.prank(alice);
+        spend.borrow{value: reqBtc}(50e18, address(0), address(0));
+
+        vm.prank(bob);
+        spend.borrow{value: reqBtc}(50e18, address(0), address(0));
+
+        address charlie = makeAddr("charlie");
+        vm.deal(charlie, 5 ether);
+        vm.prank(charlie);
+        spend.borrow{value: reqBtc}(50e18, address(0), address(0));
+
+        assertEq(spend.getActiveBorrowerCount(), 3);
+        address[] memory borrowers = spend.getActiveBorrowers();
+        assertEq(borrowers[0], alice);
+        assertEq(borrowers[1], bob);
+        assertEq(borrowers[2], charlie);
+
+        // Bob repays his loan
+        uint256 owedBob = spend.getTotalOwed(bob);
+        musd.mint(bob, owedBob);
+        vm.prank(bob);
+        musd.approve(address(spend), type(uint256).max);
+        vm.prank(bob);
+        spend.repay(address(0), address(0));
+
+        // Bob removed, Charlie swapped into Bob's slot
+        assertEq(spend.getActiveBorrowerCount(), 2);
+        borrowers = spend.getActiveBorrowers();
+        assertEq(borrowers[0], alice);
+        assertEq(borrowers[1], charlie);
+    }
 }
