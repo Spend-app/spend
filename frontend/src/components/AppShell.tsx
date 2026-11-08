@@ -49,7 +49,7 @@ export default function AppShell({
         <nav className="mt-8 space-y-1" aria-label="Main">
           {NAV.map((item) => {
             const Icon = item.icon;
-            const isExact = item.path === "/";
+            const isExact = item.path === "/app" || item.path === "/";
             return (
               <NavLink
                 key={item.path}
@@ -113,7 +113,7 @@ export default function AppShell({
       >
         {NAV.map((item) => {
           const Icon = item.icon;
-          const isExact = item.path === "/";
+          const isExact = item.path === "/app" || item.path === "/";
           return (
             <NavLink
               key={item.path}

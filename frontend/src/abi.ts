@@ -2,7 +2,7 @@ import { parseAbi } from "viem";
 
 /**
  * Spend Protocol Contract ABI (Spend.sol)
- * Wave 1 Micro-Borrowing Middleware for Mezo
+ * Micro-Borrowing Middleware for Mezo
  */
 export const spendAbi = parseAbi([
   // Core Views
@@ -13,6 +13,9 @@ export const spendAbi = parseAbi([
   "function owner() external view returns (address)",
   "function paused() external view returns (bool)",
   "function masterOpened() external view returns (bool)",
+  "function windDown() external view returns (bool)",
+  "function isInWindDown() external view returns (bool)",
+  "function writeDownFactor() external view returns (uint256)",
   "function DECIMAL_PRECISION() external view returns (uint256)",
   "function minUserICR() external view returns (uint256)",
   "function pauseICR() external view returns (uint256)",
@@ -23,9 +26,9 @@ export const spendAbi = parseAbi([
   "function BPS() external view returns (uint256)",
   "function userInterestRate() external view returns (uint256)",
   "function totalUserPrincipal() external view returns (uint256)",
+  "function totalOriginalBtc() external view returns (uint256)",
   "function grossFees() external view returns (uint256)",
-  "function masterOpenedRateBps() external view returns (uint16)",
-  "function positions(address) external view returns (uint256 btcContributed, uint256 principal, uint256 startTime, bool active)",
+  "function positions(address) external view returns (uint256 originalBtc, uint256 principal, uint256 startTime, bool active)",
 
   // Protocol Views
   "function getMasterICR() external view returns (uint256)",
@@ -38,13 +41,19 @@ export const spendAbi = parseAbi([
   "function getMasterInterestRateBps() external view returns (uint16)",
   "function getMasterBorrowingFee(uint256 debt) external view returns (uint256)",
   "function getMasterMinNetDebt() external view returns (uint256)",
-  "function getUserPosition(address user) external view returns (uint256 btcContributed, uint256 principal, uint256 accruedInterest, uint256 totalOwed, bool active)",
+  "function getUserPosition(address user) external view returns (uint256 originalBtc, uint256 currentBtcClaim, uint256 principal, uint256 accruedInterest, uint256 totalOwed, bool active)",
   "function getTotalOwed(address user) external view returns (uint256)",
   "function getUserICR(address user) external view returns (uint256)",
 
   // User Mutators
   "function borrow(uint256 musdAmount, address upperHint, address lowerHint) external payable",
   "function repay(address upperHint, address lowerHint) external",
+  "function claimInWindDown() external",
+
+  // Solvency & Maintenance Mutators
+  "function enterWindDown() external",
+  "function syncWriteDown() external",
+  "function claimMasterCollateral() external",
 
   // Owner Mutators
   "function openMasterTrove(uint256 debtAmount, address upperHint, address lowerHint) external payable",
@@ -52,7 +61,6 @@ export const spendAbi = parseAbi([
   "function increaseMasterDebt(uint256 debtIncrease, address upperHint, address lowerHint) external",
   "function decreaseMasterDebt(uint256 amount, address upperHint, address lowerHint) external",
   "function refinanceMasterDebt(address upperHint, address lowerHint) external",
-  "function claimMasterCollateral() external",
   "function closeMasterTrove() external",
   "function extractMUSD(address to, uint256 amount) external",
   "function withdrawBTC(address payable to, uint256 amount) external",
@@ -71,7 +79,7 @@ export const spendAbi = parseAbi([
   "event MasterDebtIncreased(uint256 amount)",
   "event MasterDebtDecreased(uint256 amount)",
   "event MasterTroveRefinanced(uint16 oldRateBps, uint16 newRateBps)",
-  "event MasterCollateralClaimed()",
+  "event MasterCollateralClaimed(address indexed caller)",
   "event Borrowed(address indexed user, uint256 musdReceived, uint256 btcDeposited, uint256 fee, uint256 principal)",
   "event Repaid(address indexed user, uint256 musdPaid, uint256 btcReturned)",
   "event FeesWithdrawn(address indexed to, uint256 amount)",
@@ -79,6 +87,9 @@ export const spendAbi = parseAbi([
   "event BTCWithdrawn(address indexed to, uint256 amount)",
   "event OwnershipTransferred(address indexed previousOwner, address indexed newOwner)",
   "event Paused(bool status)",
+  "event WriteDownApplied(uint256 oldTotalBtcClaimed, uint256 newTotalBtcClaimed, uint256 masterCollateral)",
+  "event WindDownEntered(address indexed caller)",
+  "event ClaimedInWindDown(address indexed user, uint256 btcClaimed, uint256 principalForgiven)",
 ]);
 
 /**

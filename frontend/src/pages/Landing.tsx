@@ -12,7 +12,7 @@ const SLIDES = [
   {
     image: "/images/hero-dashboard.png",
     title: "Get cash from your Bitcoin, keep your coins.",
-    text: "Borrow against your BTC in minutes without selling it. When you repay, the same coins you locked come back to you.",
+    text: "Borrow against your BTC in minutes without selling it. When you repay, your Bitcoin collateral is unlocked and returned directly to your wallet.",
   },
   {
     image: "/images/hero-borrow.png",
@@ -41,7 +41,7 @@ const AUTOPLAY_MS = 7000;
 const FAQS = [
   {
     q: "Why would I borrow against my Bitcoin?",
-    a: "You get cash to spend (MUSD, a digital dollar) while keeping your Bitcoin. Repay any time and the same BTC you locked comes back to you, so you never have to sell.",
+    a: "You get cash to spend (MUSD, a digital dollar) while keeping your Bitcoin. Repay any time and your Bitcoin collateral is released back to your wallet, so you never have to sell.",
   },
   {
     q: "What makes Spend different from borrowing on Mezo directly?",
@@ -49,7 +49,15 @@ const FAQS = [
   },
   {
     q: "How does my Bitcoin stay safe?",
-    a: "Your exact BTC quantity is deposited as collateral in Mezo's contracts. It is never sold or lent out, and the same quantity is returned to you in full when you repay.",
+    a: "Your BTC is deposited directly into Mezo's core contracts as collateral. It is never sold or rehypothecated, and your full pro-rata share of collateral is returned when you repay.",
+  },
+  {
+    q: "What happens if Mezo undergoes liquidations or redemptions?",
+    a: "Spend uses a mathematical pro-rata model. If Mezo redeems collateral against the master reserve, losses are distributed proportionally across the pool rather than creating a bank run. If the master reserve is ever closed by Mezo, Spend enters an automatic Wind-Down mode where all user debts are completely forgiven and remaining Bitcoin can be claimed immediately.",
+  },
+  {
+    q: "Can I get liquidated if the price of Bitcoin drops?",
+    a: "Spend maintains a safe master reserve (recommended 250% ICR) well above Mezo's 110% minimum. If Bitcoin drops, the system notifies you to manage your position. If the protocol pauses new borrowing during Mezo network stress (Recovery Mode), you are never blocked from repaying and retrieving your Bitcoin.",
   },
   {
     q: "What does it cost?",

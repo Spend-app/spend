@@ -27,6 +27,8 @@ export default function Position({ go }: { go?: (t: Tab) => void }) {
     approved,
     approve,
     repay,
+    claimInWindDown,
+    masterState,
     config,
     price,
     musdPrice,
@@ -37,6 +39,7 @@ export default function Position({ go }: { go?: (t: Tab) => void }) {
   const now = useNow(1000);
   const [approving, setApproving] = useState(false);
   const [repaying, setRepaying] = useState(false);
+  const [claiming, setClaiming] = useState(false);
 
   if (!connected) {
     return (
@@ -118,10 +121,11 @@ export default function Position({ go }: { go?: (t: Tab) => void }) {
 
   const doRepay = async () => {
     setRepaying(true);
+    const returnBtc = position.claim !== undefined ? position.claim : position.btc;
     try {
       await toast.promise(repay(owed), {
         loading: "Confirm in your wallet…",
-        success: `Repaid. ${btc(position.btc)} is back in your wallet`,
+        success: `Repaid. ${btc(returnBtc)} is back in your wallet`,
         error: (err) =>
           err instanceof Error && err.message
             ? err.message
@@ -131,6 +135,25 @@ export default function Position({ go }: { go?: (t: Tab) => void }) {
       // toast handles the error display
     } finally {
       setRepaying(false);
+    }
+  };
+
+  const doClaimInWindDown = async () => {
+    setClaiming(true);
+    const returnBtc = position.claim !== undefined ? position.claim : position.btc;
+    try {
+      await toast.promise(claimInWindDown(), {
+        loading: "Claiming collateral in wind-down…",
+        success: `Collateral claimed! ${btc(returnBtc)} is back in your wallet, debt forgiven.`,
+        error: (err) =>
+          err instanceof Error && err.message
+            ? err.message
+            : "Claim failed. Please try again.",
+      });
+    } catch {
+      // toast handles error
+    } finally {
+      setClaiming(false);
     }
   };
 
@@ -177,61 +200,82 @@ export default function Position({ go }: { go?: (t: Tab) => void }) {
           sub={`MUSD, at ${pct(config.userInterestRate)} a year`}
         />
         <Stat
-          label="Bitcoin locked"
-          value={btc(position.btc)}
-          sub={`About ${usd(position.btc * price)}`}
+          label="Bitcoin claim"
+          value={btc(position.claim ?? position.btc)}
+          sub={
+            position.claim !== undefined && position.claim < position.btc
+              ? `Written down pro-rata from ${btc(position.btc)}`
+              : `About ${usd((position.claim ?? position.btc) * price)}`
+          }
         />
         <Stat label="Bitcoin price" value={usd(price, 0)} sub="Right now" />
       </div>
 
-      <Card>
-        <SectionTitle
-          title="Repay your loan"
-          hint="Pay back what you owe and get your Bitcoin back."
-        />
-
-        <ol className="space-y-3">
-          <Step
-            done={approved}
-            n={1}
-            title="Allow repayment"
-            text="A one-time permission so Spend can pull your MUSD when you repay."
-          >
-            {!approved && (
-              <Button
-                variant="secondary"
-                loading={approving}
-                onClick={doApprove}
-              >
-                Allow
-              </Button>
-            )}
-          </Step>
-          <Step
-            done={false}
-            n={2}
-            title="Repay"
-            text={`You pay ${musd(owed, 4)} and get ${btc(position.btc)} back.`}
-          >
-            <Button
-              loading={repaying}
-              disabled={!approved || !enough}
-              onClick={doRepay}
-            >
-              Repay
-            </Button>
-          </Step>
-        </ol>
-
-        {!enough && (
-          <div className="mt-4">
-            <Notice tone="red">
-              You have {musd(musdBalance)} and need {musd(owed - musdBalance)}{" "}
-              more to repay in full.
+      {masterState.windDown ? (
+        <Card>
+          <SectionTitle
+            title="Wind-Down Settlement"
+            hint="The master Trove was closed by Mezo. Your remaining debt is forgiven."
+          />
+          <div className="mt-4 space-y-4">
+            <Notice tone="amber">
+              Spend is in wind-down mode. You can claim your fair pro-rata share of recovered Bitcoin ({btc(position.claim ?? position.btc)}) with no repayment required. Your entire loan balance of {musd(owed, 4)} is forgiven.
             </Notice>
+            <Button loading={claiming} onClick={doClaimInWindDown}>
+              Claim {btc(position.claim ?? position.btc)} &amp; Exit
+            </Button>
           </div>
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <Card>
+          <SectionTitle
+            title="Repay your loan"
+            hint="Pay back what you owe and get your Bitcoin back."
+          />
+
+          <ol className="space-y-3">
+            <Step
+              done={approved}
+              n={1}
+              title="Allow repayment"
+              text="A one-time permission so Spend can pull your MUSD when you repay."
+            >
+              {!approved && (
+                <Button
+                  variant="secondary"
+                  loading={approving}
+                  onClick={doApprove}
+                >
+                  Allow
+                </Button>
+              )}
+            </Step>
+            <Step
+              done={false}
+              n={2}
+              title="Repay"
+              text={`You pay ${musd(owed, 4)} and get ${btc(position.claim ?? position.btc)} back.`}
+            >
+              <Button
+                loading={repaying}
+                disabled={!approved || !enough}
+                onClick={doRepay}
+              >
+                Repay
+              </Button>
+            </Step>
+          </ol>
+
+          {!enough && (
+            <div className="mt-4">
+              <Notice tone="red">
+                You have {musd(musdBalance)} and need {musd(owed - musdBalance)}{" "}
+                more to repay in full.
+              </Notice>
+            </div>
+          )}
+        </Card>
+      )}
     </div>
   );
 }

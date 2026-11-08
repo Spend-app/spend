@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import toast from "react-hot-toast";
-import { num } from "../../lib/format";
+import { num, usd } from "../../lib/format";
 import { Button, Card, SectionTitle } from "../../components/ui";
 
 export const FAIL = "That didn't go through. Please try again.";
@@ -170,14 +170,26 @@ export function SetupCard({
   onOpen: (bitcoin: number, cash: number) => Promise<void>;
   price: number;
 }) {
-  const [bitcoin, setBitcoin] = useState("");
   const [cash, setCash] = useState("2000");
+  const [targetIcr, setTargetIcr] = useState(250);
   const [loading, setLoading] = useState(false);
 
+  const cashNum = Number(cash) || 0;
+  const autoBtc =
+    price > 0 && cashNum > 0 ? (cashNum * (targetIcr / 100)) / price : 0;
+
   const submit = async () => {
+    if (cashNum < 1800) {
+      toast.error("Borrow at least 1,800 MUSD (Mezo minimum debt).");
+      return;
+    }
+    if (!(autoBtc > 0)) {
+      toast.error("BTC amount must be greater than zero.");
+      return;
+    }
     setLoading(true);
     try {
-      await onOpen(Number(bitcoin), Number(cash));
+      await onOpen(autoBtc, cashNum);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : FAIL);
     } finally {
@@ -185,59 +197,74 @@ export function SetupCard({
     }
   };
 
-  const needed = price > 0 ? (Number(cash) * 2.5) / price : 0;
-
   return (
     <Card>
       <SectionTitle
         title="Open the master reserve"
-        hint="Spend needs to open its master reserve on Mezo once. You deposit Bitcoin and mint initial buffer MUSD."
+        hint="Spend needs to open its master reserve on Mezo once. Enter the MUSD to borrow and the required Bitcoin collateral will be automatically calculated."
       />
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-medium text-ink">
-            Bitcoin to deposit
-          </label>
-          <div className="mt-1.5">
-            <AmountInput
-              value={bitcoin}
-              onChange={setBitcoin}
-              unit="BTC"
-              label="Bitcoin to deposit"
-              placeholder="0.0000"
-            />
-          </div>
-          {Number(cash) > 0 && price > 0 && (
-            <p className="mt-1.5 text-xs text-mute">
-              About {num(needed, 4)} BTC keeps the reserve at a safe 250% ICR.
-            </p>
-          )}
-          {Number(cash) > 0 && price <= 0 && (
-            <p className="mt-1.5 text-xs text-amber-600">
-              BTC price not loaded yet. Enter the deposit amount manually.
-            </p>
-          )}
-        </div>
-        <div>
-          <label className="text-sm font-medium text-ink">
-            MUSD to borrow
-          </label>
+          <label className="text-sm font-medium text-ink">MUSD to borrow</label>
           <div className="mt-1.5">
             <AmountInput
               value={cash}
               onChange={setCash}
               unit="MUSD"
               label="MUSD to borrow"
+              placeholder="2000"
             />
           </div>
           <p className="mt-1.5 text-xs text-mute">
             At least 1,800 MUSD (Mezo minimum debt).
           </p>
         </div>
+
+        <div>
+          <label htmlFor="target-icr" className="text-sm font-medium text-ink">
+            Target Collateral Ratio
+          </label>
+          <div className="mt-1.5">
+            <select
+              id="target-icr"
+              value={targetIcr}
+              onChange={(e) => setTargetIcr(Number(e.target.value))}
+              className="w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm font-medium text-ink outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+            >
+              <option value={200}>200% ICR</option>
+              <option value={250}>250% ICR (Recommended)</option>
+              <option value={300}>300% ICR (Conservative)</option>
+              <option value={350}>350% ICR</option>
+              <option value={400}>400% ICR</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-ink">
+            Bitcoin to deposit (auto-calculated)
+          </label>
+          <div className="mt-1.5 flex items-center justify-between rounded-xl border border-line bg-soft px-3 py-2.5">
+            <span className="text-sm font-semibold tabular-nums text-ink">
+              {autoBtc > 0 ? num(autoBtc, 6) : "0.000000"}
+            </span>
+            <span className="text-xs font-semibold text-mute">BTC</span>
+          </div>
+          {price > 0 && cashNum > 0 ? (
+            <p className="mt-1.5 text-xs text-mute">
+              At {usd(price)}/BTC, about {num(autoBtc, 6)} BTC keeps the reserve at a safe {targetIcr}% ICR.
+            </p>
+          ) : price <= 0 ? (
+            <p className="mt-1.5 text-xs text-amber-600">
+              BTC price not loaded yet. Waiting for Mezo price feed…
+            </p>
+          ) : null}
+        </div>
+
         <Button
           full
           loading={loading}
-          disabled={!(Number(bitcoin) > 0)}
+          disabled={cashNum < 1800 || !(autoBtc > 0)}
           onClick={submit}
         >
           Open reserve
@@ -246,4 +273,3 @@ export function SetupCard({
     </Card>
   );
 }
-

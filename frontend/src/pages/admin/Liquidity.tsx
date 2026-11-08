@@ -12,6 +12,8 @@ export default function AdminLiquidity() {
     increaseMasterDebt,
     decreaseMasterDebt,
     withdrawFees,
+    withdrawBTC,
+    extractMUSD,
   } = useApp();
 
   const depositBitcoin = async (n: number) => {
@@ -30,6 +32,9 @@ export default function AdminLiquidity() {
     if (!(n > 0)) throw new Error("Enter an amount of MUSD.");
     if (n > masterState.cashBuffer)
       throw new Error(`You only have ${musd(masterState.cashBuffer, 0)} in buffer.`);
+    const maxPaydown = Math.max(0, masterState.debt - 1800);
+    if (n > maxPaydown)
+      throw new Error(`Cannot drop below Mezo's 1,800 MUSD minimum net debt. Max paydown possible is ${musd(maxPaydown, 2)}.`);
     await tx(`Paid down ${musd(n, 0)} of master debt`, () =>
       decreaseMasterDebt(n),
     );
@@ -40,6 +45,24 @@ export default function AdminLiquidity() {
     await tx(`Withdrew ${musd(masterState.grossFees)}`, () =>
       withdrawFees(address, masterState.grossFees),
     );
+  };
+
+  const handleWithdrawBTC = async (n: number) => {
+    if (!(n > 0)) throw new Error("Enter an amount of BTC.");
+    if (masterState.totalUserPrincipal > 0)
+      throw new Error("Cannot extract capital while users have active loans.");
+    if (n > masterState.contractBtcBalance)
+      throw new Error(`Contract only holds ${btc(masterState.contractBtcBalance, 4)}.`);
+    await tx(`Withdrew ${btc(n, 4)} to wallet`, () => withdrawBTC(address, n));
+  };
+
+  const handleExtractMUSD = async (n: number) => {
+    if (!(n > 0)) throw new Error("Enter an amount of MUSD.");
+    if (masterState.totalUserPrincipal > 0)
+      throw new Error("Cannot extract capital while users have active loans.");
+    if (n > masterState.cashBuffer)
+      throw new Error(`Contract only has ${musd(masterState.cashBuffer, 0)} in buffer.`);
+    await tx(`Extracted ${musd(n, 0)} to wallet`, () => extractMUSD(address, n));
   };
 
   return (
@@ -93,6 +116,22 @@ export default function AdminLiquidity() {
             {musd(config.bufferThreshold, 0)}) and master ICR is healthy.
           </p>
         </Card>
+
+        <AmountCard
+          title="Withdraw Contract BTC"
+          hint={`Withdraw native BTC held in the contract (e.g. after closing the reserve). Available: ${btc(masterState.contractBtcBalance, 4)}.`}
+          unit="BTC"
+          button="Withdraw BTC"
+          onSubmit={handleWithdrawBTC}
+        />
+
+        <AmountCard
+          title="Extract Contract MUSD"
+          hint={`Extract remaining MUSD cash buffer to your owner wallet. Available: ${musd(masterState.cashBuffer, 0)}.`}
+          unit="MUSD"
+          button="Extract MUSD"
+          onSubmit={handleExtractMUSD}
+        />
       </div>
     </div>
   );

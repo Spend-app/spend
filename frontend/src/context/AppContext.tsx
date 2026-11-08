@@ -43,7 +43,8 @@ const toNum = (v: bigint | undefined, decimals = 18) =>
   v !== undefined ? Number(formatUnits(v, decimals)) : 0;
 
 export interface Position {
-  btc: number; // exact BTC quantity deposited
+  btc: number; // original BTC quantity deposited
+  claim: number; // current effective BTC claim after write-down
   principal: number; // MUSD principal owed
   startTime: number; // ms timestamp
   accruedInterest?: number; // MUSD accrued
@@ -75,6 +76,9 @@ export interface MasterState {
   totalUserPrincipal: number;
   grossFees: number;
   owner: string;
+  windDown: boolean;
+  writeDownFactor: number;
+  contractBtcBalance: number;
 }
 
 interface AppState {
@@ -98,6 +102,9 @@ interface AppState {
   approve: () => Promise<void>;
   borrow: (amount: number, btcToSend: number) => Promise<void>;
   repay: (totalOwed?: number) => Promise<void>;
+  claimInWindDown: () => Promise<void>;
+  enterWindDown: () => Promise<void>;
+  syncWriteDown: () => Promise<void>;
   setPaused: (v: boolean) => Promise<void>;
   refetchAll: () => Promise<void>;
 
@@ -172,6 +179,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // 1. Native BTC Balance
   const { data: btcData, refetch: refetchBtc } = useBalance({
     address,
+    chainId: mezoTestnet.id,
+  });
+
+  const { data: contractBtcData, refetch: refetchContractBtc } = useBalance({
+    address: SPEND_CONTRACT_ADDRESS,
     chainId: mezoTestnet.id,
   });
 
@@ -303,6 +315,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         abi: spendAbi,
         functionName: "getMasterInterestRateBps",
       },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "isInWindDown",
+      },
+      {
+        address: SPEND_CONTRACT_ADDRESS,
+        abi: spendAbi,
+        functionName: "writeDownFactor",
+      },
     ],
     query: {
       refetchInterval: 12_000,
@@ -383,6 +405,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       | [bigint, bigint, bigint, bigint, bigint, bigint]
       | undefined;
     const mezoRateBpsRaw = protocolData?.[18]?.result as number | undefined;
+    const windDownRaw = protocolData?.[19]?.result as boolean | undefined;
+    const writeDownFactorRaw = protocolData?.[20]?.result as bigint | undefined;
 
     const collateral = toNum(troveStateRaw?.[0], 18);
     const principal = toNum(troveStateRaw?.[1], 18);
@@ -401,31 +425,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
       totalUserPrincipal: toNum(totalUserPrincipalRaw, 18),
       grossFees: toNum(grossFeesRaw, 18),
       owner,
+      windDown: Boolean(windDownRaw),
+      writeDownFactor: toNum(writeDownFactorRaw, 18) || 1,
+      contractBtcBalance: contractBtcData
+        ? Number(formatUnits(contractBtcData.value, contractBtcData.decimals))
+        : 0,
     };
-  }, [protocolData, masterOpened, owner]);
+  }, [protocolData, masterOpened, owner, contractBtcData]);
 
   // Parse User Position
   const position: Position | null = useMemo(() => {
     if (!address) return null;
 
     const userPos = userPositionData?.[0]?.result as
-      | [bigint, bigint, bigint, bigint, boolean]
+      | [bigint, bigint, bigint, bigint, bigint, boolean]
       | undefined;
     const rawPos = userPositionData?.[1]?.result as
       | [bigint, bigint, bigint, boolean]
       | undefined;
 
-    const isActive = userPos?.[4] || rawPos?.[3];
+    const isActive = userPos?.[5] ?? rawPos?.[3] ?? false;
     if (!isActive) return null;
 
-    const btcContributed = userPos?.[0] ?? rawPos?.[0] ?? 0n;
-    const principal = userPos?.[1] ?? rawPos?.[1] ?? 0n;
-    const accruedInterest = userPos?.[2] ?? 0n;
-    const totalOwed = userPos?.[3] ?? 0n;
+    const originalBtc = userPos?.[0] ?? rawPos?.[0] ?? 0n;
+    const currentBtcClaim = userPos?.[1] ?? originalBtc;
+    const principal = userPos?.[2] ?? rawPos?.[1] ?? 0n;
+    const accruedInterest = userPos?.[3] ?? 0n;
+    const totalOwed = userPos?.[4] ?? 0n;
     const startTimeSeconds = rawPos?.[2] ?? 0n;
 
     return {
-      btc: Number(formatUnits(btcContributed, 18)),
+      btc: Number(formatUnits(originalBtc, 18)),
+      claim: Number(formatUnits(currentBtcClaim, 18)),
       principal: Number(formatUnits(principal, 18)),
       startTime: Number(startTimeSeconds) * 1000,
       accruedInterest: Number(formatUnits(accruedInterest, 18)),
@@ -450,6 +481,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const refetchAll = useCallback(async () => {
     await Promise.allSettled([
       refetchBtc(),
+      refetchContractBtc(),
       refetchMusd(),
       refetchAllowance(),
       refetchPosition(),
@@ -457,6 +489,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     ]);
   }, [
     refetchBtc,
+    refetchContractBtc,
     refetchMusd,
     refetchAllowance,
     refetchPosition,
@@ -567,6 +600,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [address, writeContractAsync, publicClient, refetchProtocol],
   );
+
+  const claimInWindDown = useCallback(async () => {
+    if (!address) throw new Error("Please connect your wallet first.");
+    const hash = await writeContractAsync({
+      address: SPEND_CONTRACT_ADDRESS,
+      abi: spendAbi,
+      functionName: "claimInWindDown",
+    });
+    if (publicClient) {
+      await publicClient.waitForTransactionReceipt({ hash });
+    }
+    await refetchAll();
+  }, [address, writeContractAsync, publicClient, refetchAll]);
+
+  const enterWindDown = useCallback(async () => {
+    if (!address) throw new Error("Please connect your wallet first.");
+    const hash = await writeContractAsync({
+      address: SPEND_CONTRACT_ADDRESS,
+      abi: spendAbi,
+      functionName: "enterWindDown",
+    });
+    if (publicClient) {
+      await publicClient.waitForTransactionReceipt({ hash });
+    }
+    await refetchProtocol();
+  }, [address, writeContractAsync, publicClient, refetchProtocol]);
+
+  const syncWriteDown = useCallback(async () => {
+    if (!address) throw new Error("Please connect your wallet first.");
+    const hash = await writeContractAsync({
+      address: SPEND_CONTRACT_ADDRESS,
+      abi: spendAbi,
+      functionName: "syncWriteDown",
+    });
+    if (publicClient) {
+      await publicClient.waitForTransactionReceipt({ hash });
+    }
+    await refetchProtocol();
+  }, [address, writeContractAsync, publicClient, refetchProtocol]);
 
   // Admin Master Trove Actions
   const openMasterTrove = useCallback(
@@ -868,6 +940,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       approve,
       borrow,
       repay,
+      claimInWindDown,
+      enterWindDown,
+      syncWriteDown,
       setPaused,
       refetchAll,
       openMasterTrove,
@@ -908,6 +983,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       approve,
       borrow,
       repay,
+      claimInWindDown,
+      enterWindDown,
+      syncWriteDown,
       setPaused,
       refetchAll,
       openMasterTrove,

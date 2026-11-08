@@ -19,6 +19,7 @@ export default function Borrow({ go }: { go?: (t: Tab) => void }) {
     connect,
     position,
     paused,
+    masterState,
     borrow,
     btcBalance,
     config,
@@ -41,7 +42,7 @@ export default function Borrow({ go }: { go?: (t: Tab) => void }) {
   else if (connected && n > 0 && q.toSend > btcBalance)
     error = "You do not have enough Bitcoin in your wallet for this amount.";
 
-  const blocked = paused || !!position;
+  const blocked = paused || !!position || masterState.recoveryMode || masterState.windDown;
   const canSubmit = n >= config.minBorrow && !error && !blocked;
 
   const toPosition = () => (go ? go("position") : navigate("/app/position"));
@@ -84,7 +85,17 @@ export default function Borrow({ go }: { go?: (t: Tab) => void }) {
             </button>
           </Notice>
         )}
-        {paused && (
+        {masterState.windDown && (
+          <Notice tone="amber" icon={<AlertCircle className="h-4 w-4" />}>
+            Protocol is in Wind-Down mode. New loans are permanently closed.
+          </Notice>
+        )}
+        {masterState.recoveryMode && !masterState.windDown && (
+          <Notice tone="amber" icon={<AlertCircle className="h-4 w-4" />}>
+            Mezo is currently in Recovery Mode (system TCR &lt; 150%). New borrowing is temporarily paused for protocol safety.
+          </Notice>
+        )}
+        {paused && !masterState.windDown && (
           <Notice tone="amber" icon={<PauseCircle className="h-4 w-4" />}>
             New loans are paused for now. You can still repay a loan you already
             have.

@@ -12,6 +12,8 @@ export default function AdminOperations() {
     refinanceMasterDebt,
     claimMasterCollateral,
     closeMasterTrove,
+    syncWriteDown,
+    enterWindDown,
     masterState,
   } = useApp();
 
@@ -32,6 +34,16 @@ export default function AdminOperations() {
     await tx("Collateral surplus claimed from Mezo", () =>
       claimMasterCollateral(),
     );
+  };
+
+  const triggerSyncWriteDown = async () => {
+    await tx("Write-down factor synced with Mezo collateral", () =>
+      syncWriteDown(),
+    );
+  };
+
+  const triggerWindDown = async () => {
+    await tx("Protocol entered wind-down mode", () => enterWindDown());
   };
 
   const closeReserve = async () => {
@@ -72,6 +84,28 @@ export default function AdminOperations() {
           >
             <Button variant="secondary" onClick={claimSurplus}>
               Claim Surplus
+            </Button>
+          </Action>
+
+          <Action
+            title="Sync Collateral Write-Down"
+            text={`Synchronizes write-down factor against current Mezo collateral. (Current factor: ${(masterState.writeDownFactor * 100).toFixed(2)}%).`}
+          >
+            <Button variant="secondary" onClick={triggerSyncWriteDown}>
+              Sync Write-Down
+            </Button>
+          </Action>
+
+          <Action
+            title="Enter Wind-Down Mode"
+            text="Permanently activates wind-down exit path if master Trove is liquidated or closed by Mezo. Forgives debts and returns recovered collateral."
+          >
+            <Button
+              variant="danger"
+              disabled={masterState.windDown}
+              onClick={triggerWindDown}
+            >
+              {masterState.windDown ? "In Wind-Down" : "Enter Wind-Down"}
             </Button>
           </Action>
 
