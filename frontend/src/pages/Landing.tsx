@@ -69,6 +69,44 @@ const FAQS = [
   },
 ];
 
+const COMPARISON = [
+  {
+    feature: "Minimum borrowing",
+    mezo: "1,800 MUSD ($1,800)",
+    spend: "10 MUSD ($10)",
+  },
+  {
+    feature: "Gas compensation",
+    mezo: "200 MUSD locked per trove",
+    spend: "$0 (covered by master reserve)",
+  },
+  {
+    feature: "Trove management",
+    mezo: "Self-managed (ratios & hints)",
+    spend: "Automated (single transaction)",
+  },
+  {
+    feature: "Collateral safety ratio",
+    mezo: "Individual ICR (110% minimum)",
+    spend: "Shared reserve at 250% ICR",
+  },
+  {
+    feature: "Redemption protection",
+    mezo: "Individual trove exposure",
+    spend: "Pro-rata pool solvency",
+  },
+  {
+    feature: "Reserve closure safeguard",
+    mezo: "Standard Liquity redemption",
+    spend: "Full debt forgiveness in Wind-Down",
+  },
+  {
+    feature: "Underlying infrastructure",
+    mezo: "Native Mezo core contracts",
+    spend: "Native Mezo core contracts",
+  },
+];
+
 /** Centered hero copy with a live app showcase rendered from generated
  *  screenshots (scripts/take-shots.sh). The showcase scales down responsively
  *  and the whole hero stays centered at every breakpoint. */
@@ -232,6 +270,67 @@ export default function Landing() {
               }`}
             />
           ))}
+        </div>
+      </section>
+
+      {/* Product Comparison: Direct Trove vs Spend */}
+      <section className="border-t border-line bg-white py-20 sm:py-24">
+        <div className="mx-auto max-w-4xl px-5">
+          <div className="max-w-2xl">
+            <h2 className="font-display text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
+              Direct Troves vs. Spend
+            </h2>
+            <p className="mt-3 text-base text-mute">
+              Spend is built directly on Mezo. You can interact with Mezo core
+              contracts for institutional sizes, or use Spend for fast everyday
+              micro-borrowing.
+            </p>
+          </div>
+
+          <div className="mt-10 overflow-hidden rounded-2xl border border-line bg-white">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-line bg-soft/70">
+                    <th
+                      scope="col"
+                      className="min-w-40 py-4 pl-6 pr-4 font-display font-semibold text-ink sm:w-1/3"
+                    >
+                      Feature
+                    </th>
+                    <th
+                      scope="col"
+                      className="min-w-40 py-4 px-4 font-display font-semibold text-mute sm:w-1/3"
+                    >
+                      Direct on Mezo Core
+                    </th>
+                    <th
+                      scope="col"
+                      className="min-w-45 py-4 pl-4 pr-6 font-display font-semibold text-primary sm:w-1/3"
+                    >
+                      Through Spend
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {COMPARISON.map((row) => (
+                    <tr
+                      key={row.feature}
+                      className="transition-colors hover:bg-soft/40"
+                    >
+                      <td className="py-4 pl-6 pr-4 font-medium text-ink">
+                        {row.feature}
+                      </td>
+                      <td className="py-4 px-4 text-mute">{row.mezo}</td>
+                      <td className="py-4 pl-4 pr-6 font-semibold text-ink">
+                        {row.spend}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </section>
 
