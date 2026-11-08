@@ -17,7 +17,7 @@ const SLIDES = [
   {
     image: "/images/hero-borrow.png",
     title: "Use your money, keep your upside.",
-    text: "Turn idle Bitcoin into everyday cash. Your coins stay yours — you're never selling them.",
+    text: "Turn idle Bitcoin into everyday cash. Your coins stay yours, you're never selling them.",
   },
   {
     image: "/images/hero-position.png",
@@ -116,7 +116,7 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header – transparent over the dark hero, frosted glass once scrolled */}
+      {/* Header: transparent over the dark hero, frosted glass once scrolled */}
       <header
         className={`fixed inset-x-0 top-0 z-20 transition-all duration-300 ${
           scrolled
@@ -137,11 +137,11 @@ export default function Landing() {
 
       {/* Hero carousel */}
       <section className="group relative flex min-h-screen items-center overflow-hidden bg-[#100d1f]">
-        {/* Branded backdrop — layered gradients + a faint grid. Always on-brand,
+        {/* Branded backdrop: layered gradients and a faint grid. Always on-brand,
             and the base that any real hero photo sits on top of. */}
         <div className="absolute inset-0">
-          <div className="absolute -left-40 -top-48 h-[36rem] w-[36rem] rounded-full bg-primary/25 blur-[130px]" />
-          <div className="absolute -bottom-40 right-0 h-[32rem] w-[32rem] rounded-full bg-[#f7931a]/10 blur-[130px]" />
+          <div className="absolute -left-40 -top-48 h-144 w-xl rounded-full bg-primary/25 blur-[130px]" />
+          <div className="absolute -bottom-40 right-0 h-128 w-lg rounded-full bg-btc/10 blur-[130px]" />
           <div
             className="absolute inset-0 opacity-[0.16]"
             style={{
