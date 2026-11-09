@@ -240,3 +240,32 @@ To build for production:
 cd frontend
 npm run build
 ```
+
+### Autonomous Keeper & Alert Bot
+```bash
+cd bot
+npm install
+npm run dev
+```
+
+---
+
+## 10. Roadmap to Mainnet & Production Hardening
+
+Before deploying with real mainnet capital, the protocol will complete the following production hardening milestones:
+
+1. **Third-Party Security Audit:**
+   - Formal audit of [`contract/src/Spend.sol`](file:///home/freed/Projects/spend/contract/src/Spend.sol) conducted while on testnet prior to mainnet deployment.
+   - Comprehensive verification of pro-rata write-down math, individual user liquidation mechanics, and reentrancy protections.
+
+2. **Multisig Governance (Safe):**
+   - The contract `owner` role will be transferred to a Gnosis Safe multisig (e.g., 2-of-3 or 3-of-5 signers).
+   - Eliminates single-point-of-failure risk: parameter updates, pauses, or fee withdrawals will require multiple hardware wallet confirmations.
+
+3. **Master Reserve Capitalization:**
+   - Initial master Trove funded with deep collateral reserves targeting **>= 300% ICR** upon mainnet genesis.
+   - High ICR buffer ensures the master Trove is resilient against market flash crashes and positioned safely behind other borrowers in Mezo's redemption queue.
+
+4. **High-Availability Cloud Bot (Render / AWS):**
+   - Autonomous Keeper & Alert Bot deployed as a continuous background daemon on cloud infrastructure (e.g., Render, Railway, or AWS ECS).
+   - Redundant RPC connections with dynamic gas price bidding to ensure user liquidations execute reliably during market volatility.

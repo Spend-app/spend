@@ -20,6 +20,11 @@ export const mezoTestnet = defineChain({
   blockExplorers: {
     default: { name: "MezoScan", url: "https://explorer.test.mezo.org" },
   },
+  contracts: {
+    multicall3: {
+      address: "0xcA11bde05977b3631167028862bE2a173976CA11",
+    },
+  },
 });
 
 export const CONFIG = {
@@ -30,6 +35,7 @@ export const CONFIG = {
   mezoPriceFeed: (process.env.MEZO_PRICE_FEED || "0x86bCF0841622a5dAC14A313a15f96A95421b9366") as `0x${string}`,
   mezoBorrowerOps: (process.env.MEZO_BORROWER_OPERATIONS || "0xCdF7028ceAB81fA0C6971208e83fa7872994beE5") as `0x${string}`,
   mezoMusd: (process.env.MEZO_MUSD || "0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503") as `0x${string}`,
+  discordWebhookUrl: process.env.DISCORD_WEBHOOK_URL || "",
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || "",
   telegramChatId: process.env.TELEGRAM_CHAT_ID || "",
   keeperPrivateKey: (process.env.KEEPER_PRIVATE_KEY || "") as `0x${string}`,

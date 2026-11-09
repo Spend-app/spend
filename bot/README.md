@@ -59,18 +59,19 @@ npm start
 
 ---
 
-## 3. How to Set Up Free Telegram Alerts (60 Seconds)
+## 3. How to Set Up Free Discord Webhook Alerts (15 Seconds)
 
-1. Open Telegram and search for **`@BotFather`**.
-2. Send `/newbot`, name your bot (e.g., `Spend Keeper`), and give it a unique username ending in `bot` (e.g., `my_spend_keeper_bot`).
-3. Copy the **HTTP API Token** provided by BotFather into `TELEGRAM_BOT_TOKEN` in `.env`.
-4. Start a chat with your new bot by clicking `Start`.
-5. Get your Chat ID:
-   - Search for **`@userinfobot`** on Telegram and click `Start`. It will reply with your `Id`.
-   - Paste that number into `TELEGRAM_CHAT_ID` in `.env`.
-6. Restart the bot. You will receive an immediate confirmation message.
+1. Open your Discord server (or create a private one for your team).
+2. Go to **Channel Settings** on your desired alert channel (e.g., `#spend-alerts`).
+3. Click **Integrations** $\rightarrow$ **Webhooks** $\rightarrow$ **New Webhook**.
+4. Name it `Spend Keeper Bot` and click **Copy Webhook URL**.
+5. Paste it into `DISCORD_WEBHOOK_URL` in `bot/.env`:
+   ```ini
+   DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
+   ```
+6. Restart the bot. All alerts will appear as color-coded embed cards on desktop and mobile.
 
-*(If placeholders remain in `.env`, the bot automatically logs formatted alert cards directly to the terminal without crashing.)*
+*(Optional: Telegram alerts are also supported via `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.)*
 
 ---
 

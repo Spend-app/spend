@@ -4,10 +4,20 @@ import { CONFIG } from "./config.js";
 const lastAlertTimestamps = new Map<string, number>();
 const DEBOUNCE_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes per unique alert key
 
-export async function sendTelegramAlert(
+export type AlertSeverity = "info" | "warning" | "danger" | "success";
+
+const SEVERITY_COLORS: Record<AlertSeverity, number> = {
+  info: 3447003, // Blue
+  warning: 16763904, // Yellow/Orange
+  danger: 15158332, // Red
+  success: 3066993, // Green
+};
+
+export async function sendAlert(
   title: string,
   message: string,
-  debounceKey?: string
+  severity: AlertSeverity = "info",
+  debounceKey?: string,
 ): Promise<void> {
   const now = Date.now();
   if (debounceKey) {
@@ -19,48 +29,89 @@ export async function sendTelegramAlert(
   }
 
   const timestamp = new Date().toISOString().replace("T", " ").substring(0, 19);
-  const formattedText = `*[SPEND PROTOCOL ALERT]*\n*${title}*\n\n${message}\n\n_Time: ${timestamp} UTC_`;
 
-  // Check if Telegram is configured with real credentials
-  const hasToken =
-    CONFIG.telegramBotToken &&
-    !CONFIG.telegramBotToken.includes("YOUR_TELEGRAM_BOT_TOKEN") &&
-    CONFIG.telegramBotToken.trim().length > 10;
-  const hasChatId =
-    CONFIG.telegramChatId &&
-    !CONFIG.telegramChatId.includes("YOUR_TELEGRAM_CHAT_ID") &&
-    CONFIG.telegramChatId.trim().length > 0;
+  // 1. Try Discord Webhook
+  const hasDiscord =
+    CONFIG.discordWebhookUrl &&
+    (CONFIG.discordWebhookUrl.includes("/api/webhooks/") ||
+      CONFIG.discordWebhookUrl.includes("discord.com/api/webhooks/") ||
+      CONFIG.discordWebhookUrl.includes("discordapp.com/api/webhooks/")) &&
+    !CONFIG.discordWebhookUrl.includes("YOUR_DISCORD_WEBHOOK");
 
-  if (!hasToken || !hasChatId) {
-    console.log(`\n================== [TELEGRAM ALERT (PLACEHOLDER MODE)] ==================`);
-    console.log(`Title: ${title}`);
-    console.log(`Body:  ${message}`);
-    console.log(`Time:  ${timestamp} UTC`);
-    console.log(`Note:  Set real TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env to receive push alerts`);
-    console.log(`========================================================================\n`);
-    return;
+  if (hasDiscord) {
+    try {
+      const res = await fetch(CONFIG.discordWebhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: "Spend Keeper Watchdog",
+          avatar_url:
+            "https://explorer.test.mezo.org/assets/configs/network_icon.png",
+          embeds: [
+            {
+              title: `[SPEND] ${title}`,
+              description: message,
+              color: SEVERITY_COLORS[severity],
+              footer: {
+                text: `Mezo Testnet (ChainId: ${CONFIG.chainId}) | Spend Protocol`,
+              },
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        }),
+      });
+
+      if (!res.ok) {
+        console.error(
+          `[Discord] Webhook error: ${res.status} ${await res.text()}`,
+        );
+      } else {
+        console.log(`[Discord] Alert delivered: "${title}"`);
+      }
+    } catch (err: any) {
+      console.error(`[Discord] Failed to send webhook:`, err?.message || err);
+    }
   }
 
-  try {
-    const url = `https://api.telegram.org/bot${CONFIG.telegramBotToken}/sendMessage`;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: CONFIG.telegramChatId,
-        text: formattedText,
-        parse_mode: "Markdown",
-        disable_web_page_preview: true,
-      }),
-    });
+  // 2. Try Telegram if configured
+  const hasTelegram =
+    CONFIG.telegramBotToken &&
+    !CONFIG.telegramBotToken.includes("YOUR_") &&
+    CONFIG.telegramChatId &&
+    !CONFIG.telegramChatId.includes("YOUR_");
 
-    if (!res.ok) {
-      const err = await res.text();
-      console.error(`[Telegram] Failed to send alert: ${res.status} ${err}`);
-    } else {
-      console.log(`[Telegram] Alert delivered successfully: "${title}"`);
+  if (hasTelegram) {
+    try {
+      const formattedText = `*[SPEND ALERT - ${title}]*\n\n${message}\n\n_Time: ${timestamp} UTC_`;
+      const url = `https://api.telegram.org/bot${CONFIG.telegramBotToken}/sendMessage`;
+      await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: CONFIG.telegramChatId,
+          text: formattedText,
+          parse_mode: "Markdown",
+          disable_web_page_preview: true,
+        }),
+      });
+    } catch (err: any) {
+      console.error(`[Telegram] Error:`, err?.message || err);
     }
-  } catch (err: any) {
-    console.error(`[Telegram] Network error sending alert:`, err?.message || err);
+  }
+
+  // 3. Fallback to Console Card if neither is configured
+  if (!hasDiscord && !hasTelegram) {
+    console.log(
+      `\n================== [WATCHDOG ALERT: ${title}] ==================`,
+    );
+    console.log(`Severity: ${severity.toUpperCase()}`);
+    console.log(`Message:  ${message}`);
+    console.log(`Time:     ${timestamp} UTC`);
+    console.log(
+      `Tip:      Set DISCORD_WEBHOOK_URL in .env to receive instant Discord notifications`,
+    );
+    console.log(
+      `========================================================================\n`,
+    );
   }
 }

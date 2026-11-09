@@ -17,7 +17,7 @@ export interface SystemScanResult {
   masterOpened: boolean;
   paused: boolean;
   inWindDown: boolean;
-  masterIcr: number; // In percentage (e.g., 285.4)
+  masterIcr: number; // In percentage (e.g., 227.4)
   systemTcr: number; // In percentage
   cashBufferMusd: number;
   liquidationIcrThreshold: number; // In percentage (e.g., 130)
@@ -26,6 +26,11 @@ export interface SystemScanResult {
   underwaterBorrowers: BorrowerHealth[];
   warningBorrowers: BorrowerHealth[];
   masterTroveStatus: number; // 1 = active, 3 = closedByLiquidation, 4 = closedByRedemption
+  totalOriginalBtc: number;
+  currentTroveCollBtc: number;
+  writeDownFactorPct: number;
+  needsWriteDown: boolean;
+  projectedWriteDownPct: number;
 }
 
 export async function scanProtocolState(): Promise<SystemScanResult> {
@@ -84,9 +89,21 @@ export async function scanProtocolState(): Promise<SystemScanResult> {
   let masterIcr = 0;
   let systemTcr = 0;
   let cashBufferMusd = 0;
+  let totalOriginalBtcRaw = 0n;
+  let writeDownFactorRaw = 10n ** 18n;
+  let currentTroveCollRaw = 0n;
+  let needsWriteDown = false;
+  let projectedWriteDownPct = 100;
 
   if (masterOpened) {
-    const [masterIcrRaw, systemTcrRaw, cashBufferRaw] = await Promise.all([
+    const [
+      masterIcrRaw,
+      systemTcrRaw,
+      cashBufferRaw,
+      origBtc,
+      factor,
+      troveColl,
+    ] = await Promise.all([
       publicClient.readContract({
         address: CONFIG.spendContract,
         abi: spendAbi,
@@ -102,60 +119,133 @@ export async function scanProtocolState(): Promise<SystemScanResult> {
         abi: spendAbi,
         functionName: "getCashBuffer",
       }),
+      publicClient.readContract({
+        address: CONFIG.spendContract,
+        abi: spendAbi,
+        functionName: "totalOriginalBtc",
+      }),
+      publicClient.readContract({
+        address: CONFIG.spendContract,
+        abi: spendAbi,
+        functionName: "writeDownFactor",
+      }),
+      publicClient.readContract({
+        address: CONFIG.mezoTroveManager,
+        abi: spendAbi,
+        functionName: "getEntireDebtAndColl" as any,
+        args: [CONFIG.spendContract] as any,
+      }).then((res: any) => (Array.isArray(res) ? (res[0] as bigint) : 0n)).catch(() => 0n),
     ]);
+
     masterIcr = Number(masterIcrRaw) / 1e16;
     systemTcr = Number(systemTcrRaw) / 1e16;
     cashBufferMusd = Number(formatEther(cashBufferRaw));
+    totalOriginalBtcRaw = origBtc;
+    writeDownFactorRaw = factor;
+    currentTroveCollRaw = troveColl;
+
+    if (totalOriginalBtcRaw > 0n && currentTroveCollRaw > 0n) {
+      const computedFactor = (currentTroveCollRaw * 10n ** 18n) / totalOriginalBtcRaw;
+      if (computedFactor < writeDownFactorRaw) {
+        needsWriteDown = true;
+        projectedWriteDownPct = Number(computedFactor) / 1e16;
+      }
+    }
   }
 
-  // 2. Multicall scan for each active borrower
+  // 2. Fetch each active borrower with resilient fallback
   const borrowerHealthList: BorrowerHealth[] = [];
 
   if (activeBorrowers.length > 0) {
-    const calls = activeBorrowers.flatMap((borrower) => [
-      {
-        address: CONFIG.spendContract,
-        abi: spendAbi,
-        functionName: "getUserICR",
-        args: [borrower],
-      },
-      {
-        address: CONFIG.spendContract,
-        abi: spendAbi,
-        functionName: "getUserPosition",
-        args: [borrower],
-      },
-    ]);
+    try {
+      // Primary: Multicall3
+      const calls = activeBorrowers.flatMap((borrower) => [
+        {
+          address: CONFIG.spendContract,
+          abi: spendAbi,
+          functionName: "getUserICR",
+          args: [borrower],
+        },
+        {
+          address: CONFIG.spendContract,
+          abi: spendAbi,
+          functionName: "getUserPosition",
+          args: [borrower],
+        },
+      ]);
 
-    const results = await publicClient.multicall({ contracts: calls as any });
+      const results = await publicClient.multicall({ contracts: calls as any });
 
-    for (let i = 0; i < activeBorrowers.length; i++) {
-      const borrower = activeBorrowers[i];
-      const icrResult = results[i * 2];
-      const posResult = results[i * 2 + 1];
+      for (let i = 0; i < activeBorrowers.length; i++) {
+        const borrower = activeBorrowers[i];
+        const icrResult = results[i * 2];
+        const posResult = results[i * 2 + 1];
 
-      if (icrResult.status === "success" && posResult.status === "success") {
-        const icrRaw = icrResult.result as bigint;
-        const pos = posResult.result as [bigint, bigint, bigint, bigint, bigint, boolean];
+        if (icrResult.status === "success" && posResult.status === "success") {
+          const icrRaw = icrResult.result as bigint;
+          const pos = posResult.result as [bigint, bigint, bigint, bigint, bigint, boolean];
 
-        const icr = Number(icrRaw) / 1e16;
-        const originalBtc = Number(formatEther(pos[0]));
-        const effectiveClaimBtc = Number(formatEther(pos[1]));
-        const principalMusd = Number(formatEther(pos[2]));
+          const icr = Number(icrRaw) / 1e16;
+          const originalBtc = Number(formatEther(pos[0]));
+          const effectiveClaimBtc = Number(formatEther(pos[1]));
+          const principalMusd = Number(formatEther(pos[2]));
 
-        const isUnderwater = icr < liquidationIcrThreshold;
-        const isWarning = icr < 150 && !isUnderwater;
+          const isUnderwater = icr < liquidationIcrThreshold;
+          const isWarning = icr < 150 && !isUnderwater;
 
-        borrowerHealthList.push({
-          address: borrower,
-          principalMusd,
-          originalBtc,
-          effectiveClaimBtc,
-          icr,
-          isUnderwater,
-          isWarning,
-        });
+          borrowerHealthList.push({
+            address: borrower,
+            principalMusd,
+            originalBtc,
+            effectiveClaimBtc,
+            icr,
+            isUnderwater,
+            isWarning,
+          });
+        }
       }
+    } catch {
+      // Fallback: Individual calls in parallel if multicall has any RPC hitch
+      await Promise.all(
+        activeBorrowers.map(async (borrower) => {
+          try {
+            const [icrRaw, pos] = await Promise.all([
+              publicClient.readContract({
+                address: CONFIG.spendContract,
+                abi: spendAbi,
+                functionName: "getUserICR",
+                args: [borrower],
+              }),
+              publicClient.readContract({
+                address: CONFIG.spendContract,
+                abi: spendAbi,
+                functionName: "getUserPosition",
+                args: [borrower],
+              }),
+            ]);
+
+            const icr = Number(icrRaw) / 1e16;
+            const originalBtc = Number(formatEther(pos[0]));
+            const effectiveClaimBtc = Number(formatEther(pos[1]));
+            const principalMusd = Number(formatEther(pos[2]));
+
+            const isUnderwater = icr < liquidationIcrThreshold;
+            const isWarning = icr < 150 && !isUnderwater;
+
+            borrowerHealthList.push({
+              address: borrower,
+              principalMusd,
+              originalBtc,
+              effectiveClaimBtc,
+              icr,
+              isUnderwater,
+              isWarning,
+            });
+          } catch (err: any) {
+            console.error(`[Scanner] Error reading borrower ${borrower}:`, err?.message || err);
+          }
+        })
+      );
     }
   }
 
@@ -173,5 +263,10 @@ export async function scanProtocolState(): Promise<SystemScanResult> {
     underwaterBorrowers: borrowerHealthList.filter((b) => b.isUnderwater),
     warningBorrowers: borrowerHealthList.filter((b) => b.isWarning),
     masterTroveStatus,
+    totalOriginalBtc: Number(formatEther(totalOriginalBtcRaw)),
+    currentTroveCollBtc: Number(formatEther(currentTroveCollRaw)),
+    writeDownFactorPct: Number(writeDownFactorRaw) / 1e16,
+    needsWriteDown,
+    projectedWriteDownPct,
   };
 }
