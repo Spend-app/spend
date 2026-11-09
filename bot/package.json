@@ -1,0 +1,20 @@
+{
+  "name": "spend-keeper-bot",
+  "version": "1.0.0",
+  "description": "Event-driven keeper and alerting bot for Spend on Mezo",
+  "type": "module",
+  "scripts": {
+    "start": "node --dns-result-order=ipv4first --loader tsx src/index.ts",
+    "dev": "tsx --dns-result-order=ipv4first src/index.ts",
+    "dry-run": "DRY_RUN=true tsx --dns-result-order=ipv4first src/index.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "viem": "^2.23.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}
