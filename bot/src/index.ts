@@ -1,3 +1,4 @@
+import http from "node:http";
 import { CONFIG, publicClient, keeperAccount } from "./config.js";
 import { scanProtocolState, SystemScanResult } from "./scanner.js";
 import { executeLiquidation, executeWindDown, executeSyncWriteDown } from "./executor.js";
@@ -5,6 +6,7 @@ import { sendAlert } from "./notifier.js";
 
 let isScanning = false;
 let lastBlockChecked = 0n;
+let latestState: SystemScanResult | null = null;
 
 async function runCycle(): Promise<void> {
   if (isScanning) return;
@@ -19,6 +21,7 @@ async function runCycle(): Promise<void> {
     lastBlockChecked = currentBlock;
 
     const state: SystemScanResult = await scanProtocolState();
+    latestState = state;
 
     const timestamp = new Date().toLocaleTimeString();
     console.log(
@@ -102,6 +105,7 @@ async function runCycle(): Promise<void> {
 async function startBot(): Promise<void> {
   const hasDiscord = CONFIG.discordWebhookUrl && !CONFIG.discordWebhookUrl.includes("YOUR_");
   const hasTelegram = CONFIG.telegramBotToken && !CONFIG.telegramBotToken.includes("YOUR_");
+  const PORT = Number(process.env.PORT || 3000);
 
   console.log(`========================================================================`);
   console.log(`                   SPEND PROTOCOL KEEPER & ALERT BOT                    `);
@@ -112,11 +116,52 @@ async function startBot(): Promise<void> {
   console.log(`Keeper Mode:         ${keeperAccount ? `ACTIVE (${keeperAccount.address})` : "SIMULATION / READ-ONLY (No private key set)"}`);
   console.log(`Alert Channels:      ${hasDiscord ? "DISCORD WEBHOOK" : hasTelegram ? "TELEGRAM" : "CONSOLE MODE"}`);
   console.log(`Poll Interval:       ${CONFIG.pollIntervalMs / 1000}s`);
+  console.log(`Health Check Port:   ${PORT} (Ready for Render & UptimeRobot)`);
   console.log(`========================================================================\n`);
+
+  // Start HTTP health check server for Render free web service + UptimeRobot
+  const server = http.createServer((req, res) => {
+    if (req.url === "/health" || req.url === "/") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify(
+          {
+            status: "healthy",
+            uptimeSeconds: Math.floor(process.uptime()),
+            timestamp: new Date().toISOString(),
+            network: "Mezo Testnet (ChainId 31611)",
+            contract: CONFIG.spendContract,
+            lastBlockChecked: lastBlockChecked.toString(),
+            latestState: latestState
+              ? {
+                  btcPriceUsd: latestState.btcPriceUsd,
+                  masterOpened: latestState.masterOpened,
+                  masterIcr: latestState.masterOpened ? `${latestState.masterIcr.toFixed(1)}%` : "Not Opened",
+                  cashBufferMusd: `${latestState.cashBufferMusd.toFixed(1)} MUSD`,
+                  activeBorrowerCount: latestState.activeBorrowerCount,
+                  writeDownFactorPct: `${latestState.writeDownFactorPct.toFixed(1)}%`,
+                  underwaterCount: latestState.underwaterBorrowers.length,
+                  warningCount: latestState.warningBorrowers.length,
+                }
+              : null,
+          },
+          null,
+          2
+        )
+      );
+    } else {
+      res.writeHead(404, { "Content-Type": "text/plain" });
+      res.end("Not Found");
+    }
+  });
+
+  server.listen(PORT, () => {
+    console.log(`[Health Server] Listening for UptimeRobot pings on port ${PORT}`);
+  });
 
   await sendAlert(
     "KEEPER BOT ONLINE",
-    `Spend Keeper Bot started successfully.\n• Contract: \`${CONFIG.spendContract}\` on Mezo Testnet.\n• Mode: ${keeperAccount ? "Automated Execution" : "Simulation / Alerts Only"}.`,
+    `Spend Keeper Bot started successfully.\n• Contract: \`${CONFIG.spendContract}\` on Mezo Testnet.\n• Mode: ${keeperAccount ? "Automated Execution" : "Simulation / Alerts Only"}.\n• Health Endpoint: Active on port ${PORT}.`,
     "success"
   );
 
@@ -129,6 +174,7 @@ async function startBot(): Promise<void> {
   const shutdown = () => {
     console.log("\n[Shutdown] Stopping Spend Keeper Bot gracefully...");
     clearInterval(interval);
+    server.close();
     process.exit(0);
   };
 

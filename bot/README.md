@@ -90,3 +90,38 @@ To view live logs:
 ```bash
 pm2 logs spend-keeper-bot
 ```
+
+---
+
+## 5. Free 24/7 Cloud Hosting (Render + UptimeRobot)
+
+Render charges $7/month for background workers, but provides **Free Web Services**.
+The bot includes a built-in HTTP server listening on `/health` (and `/`) so it can run as a **Free Web Service for $0/month**.
+
+### Step 1: Deploy on Render
+1. Go to [Render.com](https://render.com) and click **New +** $\rightarrow$ **Web Service**.
+2. Select your repository (`Spend-app/spend`).
+3. Configure the service:
+   - **Name:** `spend-keeper-bot`
+   - **Root Directory:** `bot`
+   - **Environment:** `Node`
+   - **Build Command:** `npm install`
+   - **Start Command:** `npm start`
+   - **Instance Type:** `Free`
+4. In **Environment Variables**, add:
+   - `RPC_URL`: `https://rpc.test.mezo.org`
+   - `SPEND_CONTRACT_ADDRESS`: `0xdADB2C17199E2247C3FB65E75F62Db6bAFc4b7a0`
+   - `DISCORD_WEBHOOK_URL`: Your Discord webhook URL
+   - `KEEPER_PRIVATE_KEY`: Your keeper private key (holds testnet gas for executing liquidations)
+5. Click **Create Web Service**. Render will assign you a free URL (e.g., `https://spend-keeper-bot.onrender.com`).
+
+### Step 2: Keep it Awake with UptimeRobot (100% Free)
+Render free services sleep after 15 minutes of inactivity. Use UptimeRobot to ping it every 5 minutes:
+1. Create a free account on [UptimeRobot.com](https://uptimerobot.com).
+2. Click **Add New Monitor**:
+   - **Monitor Type:** `HTTP(s)`
+   - **Friendly Name:** `Spend Keeper Health`
+   - **URL (or IP):** `https://spend-keeper-bot.onrender.com/health`
+   - **Monitoring Interval:** `5 minutes`
+3. Click **Create Monitor**.
+4. The bot will now run continuously 24/7/365 without sleeping or costing a dime.
