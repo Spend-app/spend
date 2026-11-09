@@ -3,14 +3,17 @@ import { spendAbi } from "./abi.js";
 import { BorrowerHealth } from "./scanner.js";
 import { sendAlert } from "./notifier.js";
 
-export async function executeLiquidation(borrower: BorrowerHealth): Promise<boolean> {
-  console.log(`[Executor] Processing liquidation for borrower ${borrower.address} (ICR: ${borrower.icr.toFixed(1)}%)...`);
+export async function executeLiquidation(
+  borrower: BorrowerHealth,
+  liquidationThreshold: number
+): Promise<boolean> {
+  console.log(`[Executor] Processing liquidation for borrower ${borrower.address} (ICR: ${borrower.icr.toFixed(1)}%, Threshold: ${liquidationThreshold}%)...`);
 
   if (!walletClient || !keeperAccount) {
     console.warn(`[Executor] No KEEPER_PRIVATE_KEY configured. Running in SIMULATION mode.`);
     await sendAlert(
       "LIQUIDATION DETECTED (SIMULATION ONLY)",
-      `Borrower \`${borrower.address}\` is underwater at **${borrower.icr.toFixed(1)}% ICR** (Threshold: ${CONFIG.masterIcrWarnThreshold}%).\n• Principal: $${borrower.principalMusd.toFixed(2)} MUSD\n• Collateral: ${borrower.originalBtc.toFixed(6)} BTC\n\n**Action Required:** Liquidate manually in the Admin Operations UI or configure KEEPER_PRIVATE_KEY in .env.`,
+      `Borrower \`${borrower.address}\` is underwater at **${borrower.icr.toFixed(1)}% ICR** (Threshold: ${liquidationThreshold}%).\n• Principal: $${borrower.principalMusd.toFixed(2)} MUSD\n• Collateral: ${borrower.originalBtc.toFixed(6)} BTC\n\n**Action Required:** Liquidate manually in the Admin Operations UI or configure KEEPER_PRIVATE_KEY in .env.`,
       "danger",
       `liq-sim-${borrower.address}`
     );

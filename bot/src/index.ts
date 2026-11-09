@@ -44,11 +44,11 @@ async function runCycle(): Promise<void> {
       await executeSyncWriteDown(state.writeDownFactorPct, state.projectedWriteDownPct);
     }
 
-    // 3. Core Keeper Duty: Underwater Borrower Liquidation (< 130% ICR)
+    // 3. Core Keeper Duty: Underwater Borrower Liquidation (< liquidationICR)
     if (state.underwaterBorrowers.length > 0) {
       console.log(`[WATCHDOG] Found ${state.underwaterBorrowers.length} underwater borrower(s)!`);
       for (const borrower of state.underwaterBorrowers) {
-        await executeLiquidation(borrower);
+        await executeLiquidation(borrower, state.liquidationIcrThreshold);
       }
     }
 

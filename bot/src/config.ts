@@ -27,6 +27,9 @@ export const mezoTestnet = defineChain({
   },
 });
 
+const rawKey = (process.env.KEEPER_PRIVATE_KEY || "").trim();
+const formattedKey = rawKey.length > 0 ? (rawKey.startsWith("0x") ? rawKey : `0x${rawKey}`) : "";
+
 export const CONFIG = {
   rpcUrl: process.env.RPC_URL || "https://rpc.test.mezo.org",
   chainId: Number(process.env.CHAIN_ID || 31611),
@@ -38,7 +41,7 @@ export const CONFIG = {
   discordWebhookUrl: process.env.DISCORD_WEBHOOK_URL || "",
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || "",
   telegramChatId: process.env.TELEGRAM_CHAT_ID || "",
-  keeperPrivateKey: (process.env.KEEPER_PRIVATE_KEY || "") as `0x${string}`,
+  keeperPrivateKey: formattedKey as `0x${string}`,
   masterIcrWarnThreshold: Number(process.env.MASTER_ICR_WARN_THRESHOLD || 230),
   bufferWarnThreshold: Number(process.env.BUFFER_WARN_THRESHOLD || 500),
   pollIntervalMs: Number(process.env.POLL_INTERVAL_MS || 15000),
@@ -49,9 +52,10 @@ export const publicClient = createPublicClient({
   transport: http(CONFIG.rpcUrl),
 });
 
-export const keeperAccount = CONFIG.keeperPrivateKey && CONFIG.keeperPrivateKey.startsWith("0x")
-  ? privateKeyToAccount(CONFIG.keeperPrivateKey)
-  : null;
+export const keeperAccount =
+  CONFIG.keeperPrivateKey && CONFIG.keeperPrivateKey.length === 66
+    ? privateKeyToAccount(CONFIG.keeperPrivateKey)
+    : null;
 
 export const walletClient = keeperAccount
   ? createWalletClient({
